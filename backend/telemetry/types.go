@@ -424,15 +424,15 @@ type Damage struct {
 	// Aggregate body/aero damage per zone, each 0.0–1.0.
 	FrontWing float64 `json:"frontWing"`
 	RearWing  float64 `json:"rearWing"`
-	Floor     float64 `json:"floor"`        // TODO: verify LMU availability
-	Diffuser  float64 `json:"diffuser"`     // TODO: verify LMU availability
-	LeftSide  float64 `json:"leftSide"`     // TODO: verify LMU availability
-	RightSide float64 `json:"rightSide"`    // TODO: verify LMU availability
+	Floor     float64 `json:"floor"`     // TODO: verify LMU availability
+	Diffuser  float64 `json:"diffuser"`  // TODO: verify LMU availability
+	LeftSide  float64 `json:"leftSide"`  // TODO: verify LMU availability
+	RightSide float64 `json:"rightSide"` // TODO: verify LMU availability
 
 	// Mechanical damage zones, each 0.0–1.0. // TODO: verify LMU availability
-	Engine       float64 `json:"engine"`
-	Gearbox      float64 `json:"gearbox"`
-	Suspension   float64 `json:"suspension"`
+	Engine     float64 `json:"engine"`
+	Gearbox    float64 `json:"gearbox"`
+	Suspension float64 `json:"suspension"`
 
 	// --- Derived performance effects (so the strategist sees consequences) ---
 
@@ -457,10 +457,10 @@ type Damage struct {
 type PitStatus string
 
 const (
-	PitNone     PitStatus = "none"      // out on track, racing
-	PitApproach PitStatus = "approach"  // on pit entry / pit lane, not stopped
-	PitStopped  PitStatus = "stopped"   // stationary in the box being serviced
-	PitExit     PitStatus = "exit"      // leaving the pits
+	PitNone     PitStatus = "none"     // out on track, racing
+	PitApproach PitStatus = "approach" // on pit entry / pit lane, not stopped
+	PitStopped  PitStatus = "stopped"  // stationary in the box being serviced
+	PitExit     PitStatus = "exit"     // leaving the pits
 )
 
 // RaceState is where a car sits in the race and its gaps to others. Gaps are in
@@ -508,25 +508,25 @@ type RaceState struct {
 type Flag string
 
 const (
-	FlagNone     Flag = "none"     // green / racing
-	FlagGreen    Flag = "green"
-	FlagYellow   Flag = "yellow"
+	FlagNone         Flag = "none" // green / racing
+	FlagGreen        Flag = "green"
+	FlagYellow       Flag = "yellow"
 	FlagDoubleYellow Flag = "double_yellow"
-	FlagBlue     Flag = "blue"     // faster car approaching to lap you
-	FlagWhite    Flag = "white"    // slow car ahead / last lap (game-dependent)
-	FlagRed      Flag = "red"      // session stopped
-	FlagChequered Flag = "chequered"
-	FlagBlack    Flag = "black"    // penalty / disqualification
+	FlagBlue         Flag = "blue"  // faster car approaching to lap you
+	FlagWhite        Flag = "white" // slow car ahead / last lap (game-dependent)
+	FlagRed          Flag = "red"   // session stopped
+	FlagChequered    Flag = "chequered"
+	FlagBlack        Flag = "black" // penalty / disqualification
 )
 
 // SafetyCarState describes any neutralization of the race.
 type SafetyCarState string
 
 const (
-	SafetyCarNone   SafetyCarState = "none"
-	SafetyCarFull   SafetyCarState = "full"   // physical safety car deployed
+	SafetyCarNone    SafetyCarState = "none"
+	SafetyCarFull    SafetyCarState = "full"    // physical safety car deployed
 	SafetyCarVirtual SafetyCarState = "virtual" // VSC / slow zones
-	SafetyCarFCY    SafetyCarState = "fcy"     // full-course yellow
+	SafetyCarFCY     SafetyCarState = "fcy"     // full-course yellow
 )
 
 // RaceControl is the session-wide flag and safety-car state, shown as overlays.

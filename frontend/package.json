@@ -1,0 +1,11 @@
+{
+  "name": "pitmate-frontend",
+  "version": "0.0.0",
+  "private": true,
+  "description": "PitMate strategist cockpit UI (Svelte). Early scaffolding — no build wired up yet.",
+  "type": "module",
+  "scripts": {
+    "dev": "echo \"TODO: configure Svelte dev server\" && exit 1",
+    "build": "echo \"TODO: configure Svelte build\" && exit 1"
+  }
+}

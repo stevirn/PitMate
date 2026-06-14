@@ -41,6 +41,8 @@ func main() {
 	flag.StringVar(&cfg.StaticDir, "static", cfg.StaticDir, "directory of built Svelte files (empty = debug page)")
 	flag.IntVar(&cfg.UpdateHz, "hz", cfg.UpdateHz, "telemetry frames per second to broadcast")
 	flag.BoolVar(&cfg.MockData, "mock", cfg.MockData, "stream synthetic data instead of the real adapter")
+	var dump bool
+	flag.BoolVar(&dump, "dump", false, "print a one-second summary of the telemetry to the console (for validation)")
 	flag.Parse()
 
 	if err := cfg.Validate(); err != nil {
@@ -76,7 +78,7 @@ func main() {
 	}()
 
 	// The broadcast loop: read a frame at the configured rate and push it out.
-	broadcastLoop(ctx, srv, src, cfg.UpdateHz)
+	broadcastLoop(ctx, srv, src, cfg.UpdateHz, dump)
 
 	// Release any resources the data source holds (e.g. the LMU adapter's
 	// shared-memory handles on Windows).
@@ -90,18 +92,25 @@ func main() {
 }
 
 // broadcastLoop reads one frame from src every 1/hz seconds and broadcasts it
-// to all connected browsers, until ctx is cancelled.
-func broadcastLoop(ctx context.Context, srv *server.Server, src source, hz int) {
+// to all connected browsers, until ctx is cancelled. When dump is true it also
+// prints a summary of the latest frame to the console once per second.
+func broadcastLoop(ctx context.Context, srv *server.Server, src source, hz int, dump bool) {
 	interval := time.Second / time.Duration(hz)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	var lastDump time.Time
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			srv.Broadcast(src.Read())
+		case now := <-ticker.C:
+			frame := src.Read()
+			srv.Broadcast(frame)
+			if dump && now.Sub(lastDump) >= time.Second {
+				lastDump = now
+				dumpFrame(frame)
+			}
 		}
 	}
 }

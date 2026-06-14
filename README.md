@@ -64,12 +64,15 @@ Useful backend flags (run `go run . -h` for all):
 | Flag | Default | Meaning |
 |---|---|---|
 | `-mock` | off | stream synthetic data instead of the real LMU adapter |
+| `-dump` | off | print a one-second telemetry summary to the console (for validation) |
 | `-static` | _(empty)_ | directory of built Svelte files (empty = debug page) |
 | `-bind` | `0.0.0.0` | address to bind (`0.0.0.0` = reachable on the LAN) |
 | `-port` | `8080` | TCP port |
 | `-hz` | `10` | telemetry frames broadcast per second |
 
-See [`docs/architecture.md`](docs/architecture.md) for how the layers connect.
+See [`docs/architecture.md`](docs/architecture.md) for how the layers connect, and
+[`docs/validation.md`](docs/validation.md) for validating the LMU adapter against
+the running game.
 
 ## Project status
 

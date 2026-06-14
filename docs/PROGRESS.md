@@ -113,6 +113,15 @@ Working end to end: game → adapter → server → **browser cockpit**.
   `go run . -static ../frontend/dist` flow.
 - **Not built/run here** (no Node on the dev box) — see caveat.
 
+### Session 5 — live-validation prep
+- Confirmed the Svelte UI works with mock data (user verified in browser).
+- Added the `-dump` flag: prints a one-second telemetry summary to the console
+  (`backend/dump.go`), so the LMU adapter can be validated against the in-game
+  HUD without a browser.
+- Wrote `docs/validation.md`: plugin install steps, how to run on the gaming PC,
+  and a field-by-field validation checklist (flags the inferred enum mappings).
+- Next: actually run it on the Windows gaming PC (plugin not yet installed).
+
 ## Key decisions (don't silently reverse)
 
 - **Server stamps `Timestamp` + `Sequence`** on `Broadcast` (not the adapter), so
@@ -132,11 +141,14 @@ Working end to end: game → adapter → server → **browser cockpit**.
    `cd backend && go run . -static ../frontend/dist -mock` and open
    http://localhost:8080. Build + serving are verified; the visual/runtime check
    in an actual browser is the remaining step.
-2. **Validate the LMU adapter against a live session** (Windows + LMU + plugin).
-   Compare values to in-game. Confirm/adjust the rF2 enum mappings flagged in
+2. **Validate the LMU adapter against a live session** (Windows + LMU + plugin) —
+   **this is the current active task.** Full procedure + checklist in
+   `docs/validation.md`. Use the new `-dump` flag (one-second console summary) to
+   compare to the in-game HUD. Confirm/adjust the rF2 enum mappings flagged in
    `mapping.go`: session type (`mSession`), flags/safety car (`mGamePhase`,
    `mYellowFlagState`), pit state (`mPitState`). Re-verify tire-wear direction
    (1.0 = new assumed) and `mAvgPathWetness` as the wetness source.
+   Plugin not yet installed as of this writing (see validation.md step 1).
 3. **Flesh out the placeholder tabs**: Strategy (track-position circle, pit
    params), Driver Coaching, Driver Vs. Components to reuse: `Panel/Stat/Bar`.
 4. **Stateful adapter enrichments** (currently `TODO`/zero): fuel-per-lap from

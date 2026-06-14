@@ -1,0 +1,63 @@
+/* Global styles for PitMate. Functional, dark, monospace — built for fast
+   reading at a glance, not for decoration. Colors live in CSS variables so a
+   light theme (or per-strategist tweaks) can be added later in one place. */
+
+:root {
+  --bg: #0d0f12;
+  --panel: #16191e;
+  --panel-2: #1c2027;
+  --line: #2a2f38;
+  --text: #e6e9ee;
+  --dim: #8b95a3;
+  --accent: #4aa3ff;
+  --ok: #3ecf6b;
+  --warn: #f5b94a;
+  --danger: #ef5350;
+  --cold: #5aa9e6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+#app {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}

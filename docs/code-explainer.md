@@ -117,24 +117,42 @@ notices and cleans up that dead connection.
 
 ### Frontend (the cockpit web page)
 
-- **`frontend/src/App.svelte`** — the top-level page of the cockpit. Later it
-  will hold the tabs and the warning banners. Currently a placeholder.
+The frontend is a **Svelte** app, built by **Vite** into plain files the Go
+server hands to the browser. "Svelte" is a toolkit that turns `.svelte` files
+(HTML + a little JavaScript + styles, all in one file) into a fast web page;
+"Vite" is the tool that bundles it. You build it once with `npm run build`.
 
-- **`frontend/src/tabs/`** — one file per main tab (Live Data, Strategy Calls,
-  etc.). Empty for now.
-
-- **`frontend/src/components/`** — reusable visual pieces shared by the tabs
-  (gauges, timelines, and so on). Empty for now.
-
-- **`frontend/package.json`** — lists the frontend's settings and build
-  commands. Not wired up yet.
+- **`frontend/index.html` / `src/main.js`** — the page shell and the line that
+  starts the app.
+- **`frontend/src/app.css`** — global styling (the dark, monospace, readable
+  look). Colors are defined once as variables so they're easy to change.
+- **`frontend/src/lib/telemetry.js`** — the data pipe. It opens the WebSocket to
+  the server and publishes each incoming frame as a "store" — a value that any
+  part of the UI can read and that updates the screen automatically when new data
+  arrives. It also tracks the connection and reconnects if it drops.
+- **`frontend/src/lib/format.js`** — small helpers that turn raw numbers into
+  readable text (lap times like `1:23.456`, gaps like `+2.1`, "—" for missing
+  data).
+- **`frontend/src/App.svelte`** — the top-level page: the header (title,
+  connection light, tab buttons), the status/flag banner, and whichever tab is
+  open.
+- **`frontend/src/tabs/`** — one file per tab. `LiveData.svelte` is fully built;
+  `CarManagement.svelte` and `Settings.svelte` are partial; `StrategyCalls`,
+  `DriverCoaching`, and `DriverVs` are placeholders describing what's coming.
+- **`frontend/src/components/`** — reusable visual pieces shared by the tabs:
+  `Panel` (a titled box), `Stat` (a labelled value), `Bar` (a fill bar for fuel/
+  wear/charge), `TireGrid` (the four tires), `Banner` (the alert strip), and
+  `Placeholder` (the "not built yet" panel).
+- **`frontend/package.json` / `vite.config.js`** — the frontend's dependencies,
+  build commands, and dev-server settings.
 
 ## Current status
 
-The structure, the standard data form, the **broadcast loop**, and the **LMU
-shared-memory adapter** all exist. On Windows with LMU and the shared-memory
-plugin running, PitMate now reads real race data; on any machine you can run the
-backend with `-mock` and watch synthetic data stream into a browser. The adapter
-has been verified by automated tests and by compiling for Windows, but has not
-yet been validated against a live game session (see the note in
-`docs/architecture.md`). Still to be built: the Svelte cockpit UI.
+PitMate now works end to end: the data model, the **broadcast loop**, the **LMU
+shared-memory adapter**, and a **Svelte cockpit UI** all exist. On Windows with
+LMU and the shared-memory plugin running it reads real race data; on any machine
+you can run the backend with `-mock` and watch synthetic data fill the cockpit in
+a browser. The Live Data tab is fully built; Car Management and Settings are
+partial; Strategy, Coaching, and Driver Vs. are placeholders. Still pending:
+validating the adapter against a live game (see `docs/architecture.md`), and
+fleshing out the remaining tabs.

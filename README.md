@@ -33,39 +33,56 @@ central game-agnostic data model.
 
 ## How to run
 
-The backend builds and runs today. The LMU adapter is still a stub, so use the
-`-mock` flag to stream synthetic data through the full pipeline:
+**1. Build the UI** (needs Node.js; produces `frontend/dist/`):
 
 ```bash
-cd backend
-go run . -mock
+cd frontend
+npm install
+npm run build
 ```
 
-Then open <http://localhost:8080> in a browser. With no built Svelte frontend
-present yet, the server serves a built-in debug page that connects to the
-WebSocket and shows each incoming frame as live JSON.
+**2. Run the backend, serving the built UI:**
 
-Useful flags (run `go run . -h` for all):
+```bash
+cd ../backend
+go run . -static ../frontend/dist -mock
+```
+
+Then open <http://localhost:8080>. `-mock` streams synthetic data so you can see
+the cockpit working without the game; drop it on a Windows gaming PC with Le Mans
+Ultimate + the shared-memory plugin running to read real telemetry. If you skip
+the UI build (no `-static`, or the directory is missing), the server falls back
+to a built-in debug page that shows each frame as raw JSON.
+
+**Frontend development** (hot reload) runs Vite on its own port and proxies the
+WebSocket to the backend — run the backend (step 2, with or without `-static`)
+and, in another terminal, `cd frontend && npm run dev`, then open
+<http://localhost:5173>.
+
+Useful backend flags (run `go run . -h` for all):
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `-mock` | off | stream synthetic data instead of the (stubbed) adapter |
+| `-mock` | off | stream synthetic data instead of the real LMU adapter |
+| `-static` | _(empty)_ | directory of built Svelte files (empty = debug page) |
 | `-bind` | `0.0.0.0` | address to bind (`0.0.0.0` = reachable on the LAN) |
 | `-port` | `8080` | TCP port |
 | `-hz` | `10` | telemetry frames broadcast per second |
-| `-static` | _(empty)_ | directory of built Svelte files (empty = debug page) |
 
 See [`docs/architecture.md`](docs/architecture.md) for how the layers connect.
 
 ## Project status
 
-**Backend functional; UI pending.** In place: the repository structure, the
-game-agnostic data model, the documentation, the **WebSocket broadcast loop**,
-and the **LMU shared-memory adapter** that reads Le Mans Ultimate via the
-rFactor2 Shared Memory Map Plugin on Windows. The adapter is covered by tests and
-compiles for Windows, but still needs a validation pass against a live game (see
-[`docs/architecture.md`](docs/architecture.md)). On non-Windows machines use
-`-mock`. Still to come: the Svelte cockpit UI.
+**End-to-end working.** In place: the game-agnostic data model, the **WebSocket
+broadcast loop**, the **LMU shared-memory adapter** (reads Le Mans Ultimate via
+the rFactor2 Shared Memory Map Plugin on Windows), and a **Svelte cockpit UI**.
+The UI has a full Live Data tab, a partial Car Management tab, a Settings/
+diagnostics tab, and wired-in placeholders for the remaining tabs (Strategy,
+Coaching, Driver Vs.).
+
+Pending: validating the LMU adapter against a live game (see
+[`docs/architecture.md`](docs/architecture.md)), and fleshing out the remaining
+tabs. On non-Windows machines, develop with `-mock`.
 
 > The LMU adapter is Windows-only at runtime (LMU and the plugin are Windows).
 > The rest of PitMate builds and runs on any OS; on Linux/macOS the adapter

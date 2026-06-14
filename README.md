@@ -59,7 +59,14 @@ See [`docs/architecture.md`](docs/architecture.md) for how the layers connect.
 
 ## Project status
 
-**Early scaffolding.** In place: the repository structure, the game-agnostic
-data model, the documentation, and the **WebSocket broadcast loop** (the server
-streams telemetry frames to any number of connected browsers). Still to come:
-the real LMU shared-memory adapter and the Svelte UI.
+**Backend functional; UI pending.** In place: the repository structure, the
+game-agnostic data model, the documentation, the **WebSocket broadcast loop**,
+and the **LMU shared-memory adapter** that reads Le Mans Ultimate via the
+rFactor2 Shared Memory Map Plugin on Windows. The adapter is covered by tests and
+compiles for Windows, but still needs a validation pass against a live game (see
+[`docs/architecture.md`](docs/architecture.md)). On non-Windows machines use
+`-mock`. Still to come: the Svelte cockpit UI.
+
+> The LMU adapter is Windows-only at runtime (LMU and the plugin are Windows).
+> The rest of PitMate builds and runs on any OS; on Linux/macOS the adapter
+> reports "not connected", so develop with `go run . -mock`.

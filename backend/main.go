@@ -12,6 +12,7 @@ package main
 import (
 	"context"
 	"flag"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -52,7 +53,7 @@ func main() {
 		log.Print("PitMate: using MOCK data source")
 		src = newMockSource()
 	} else {
-		log.Print("PitMate: using LMU adapter (stub — will report disconnected until implemented)")
+		log.Print("PitMate: using LMU adapter (reads LMU shared memory on Windows; reports disconnected elsewhere or until the game is running)")
 		a := lmu.New()
 		if err := a.Connect(); err != nil {
 			log.Printf("PitMate: adapter connect failed: %v", err)
@@ -76,6 +77,14 @@ func main() {
 
 	// The broadcast loop: read a frame at the configured rate and push it out.
 	broadcastLoop(ctx, srv, src, cfg.UpdateHz)
+
+	// Release any resources the data source holds (e.g. the LMU adapter's
+	// shared-memory handles on Windows).
+	if c, ok := src.(io.Closer); ok {
+		if err := c.Close(); err != nil {
+			log.Printf("PitMate: error closing data source: %v", err)
+		}
+	}
 
 	log.Print("PitMate: shut down cleanly")
 }

@@ -75,9 +75,30 @@ notices and cleans up that dead connection.
   built frontend lives, and whether to use mock data. Keeping these in one place
   means they are never scattered through the code.
 
-- **`backend/adapters/lmu/adapter.go`** — the Le Mans Ultimate translator. The
-  only file that knows anything about LMU. It reads LMU's shared memory and fills
-  in the standard form from `types.go`. Currently a stub.
+- **`backend/adapters/lmu/`** — the Le Mans Ultimate translator: the only part
+  of PitMate that knows anything about LMU. LMU publishes its live data through
+  the *rFactor2 Shared Memory Map Plugin* (a free add-on installed into the
+  game), which writes the race state into a block of shared memory. This folder
+  reads that block and fills in the standard form from `types.go`. It is split
+  into several files:
+  - **`adapter.go`** — ties everything together: on each tick it asks the
+    platform reader for the raw data and the mapper to translate it.
+  - **`rf2_structs.go`** — a byte-for-byte description, in Go, of exactly how the
+    plugin lays out its data in memory. This has to match the plugin precisely or
+    every value would be misread.
+  - **`reader_windows.go`** — the Windows-only code that opens the shared memory
+    and copies out a clean snapshot. (Reading live shared memory needs a tiny
+    "did the game change it mid-read?" check, which this handles.)
+  - **`reader_other.go`** — a stub for Mac/Linux (where LMU does not run), so the
+    project still builds and the adapter simply reports "not connected". This is
+    why development works on a non-Windows machine using `-mock`.
+  - **`mapping.go`** — the translation itself: raw plugin numbers in, PitMate's
+    standard form out (including unit conversions, e.g. tire temperatures from
+    Kelvin to Celsius). This is plain logic with no Windows dependency, so it is
+    fully tested everywhere.
+  - **`layout_test.go` / `mapping_test.go`** — automated checks that the memory
+    description has the right size/shape and that the translation produces the
+    expected values.
 
 - **`backend/server/websocket.go`** — the server's public face. It hands the
   cockpit web page (or a built-in debug page) to browsers, accepts WebSocket
@@ -110,7 +131,10 @@ notices and cleans up that dead connection.
 
 ## Current status
 
-The structure, the standard data form, and the **broadcast loop** all exist: run
-the backend with `-mock` and open a browser to watch live data stream in. Still
-to be built: the part that reads the real game (the LMU adapter) and the part
-that draws the cockpit (the Svelte UI).
+The structure, the standard data form, the **broadcast loop**, and the **LMU
+shared-memory adapter** all exist. On Windows with LMU and the shared-memory
+plugin running, PitMate now reads real race data; on any machine you can run the
+backend with `-mock` and watch synthetic data stream into a browser. The adapter
+has been verified by automated tests and by compiling for Windows, but has not
+yet been validated against a live game session (see the note in
+`docs/architecture.md`). Still to be built: the Svelte cockpit UI.

@@ -109,6 +109,36 @@ read one Frame from the data source, hand it to the server to broadcast, repeat.
   normalized model, they don't care which game is running.
 - **Easy to reason about.** Each layer has one job and a clean boundary.
 
+## The LMU adapter (the first adapter)
+
+Le Mans Ultimate is built on the rFactor 2 engine and exposes telemetry through
+the community **rFactor2 Shared Memory Map Plugin** — the same plugin rF2 uses.
+The plugin must be installed into LMU and enabled; it then continuously writes
+the race state into named blocks of shared memory on the gaming PC.
+
+The adapter (`backend/adapters/lmu/`) is organised so that the risky parts and
+the OS-specific parts are separated:
+
+- **`rf2_structs.go`** mirrors the plugin's memory layout byte-for-byte. The
+  reader casts raw memory straight onto these structs, so they must match the
+  plugin exactly. `layout_test.go` asserts the sizes/offsets to catch mistakes.
+- **`reader_windows.go`** opens the shared memory and copies out consistent
+  snapshots (using the plugin's version counters to avoid half-written reads).
+  It only compiles on Windows.
+- **`reader_other.go`** is a stub for non-Windows machines, so the project builds
+  and runs (reporting "not connected") during development on Linux/macOS.
+- **`mapping.go`** translates the raw rF2 structs into `telemetry.Frame`. It is
+  pure logic with no OS calls, so it is fully unit-tested on any platform — which
+  is where the bulk of the translation correctness is verified.
+
+> **Validation status.** The adapter is verified by unit tests (layout + mapping)
+> and compiles cleanly for Windows, but it has **not yet been run against a live
+> LMU session**. A few mappings depend on rF2 enum values (session type, game
+> phase/flags, pit state) whose exact meaning should be confirmed on a real game,
+> and some `telemetry.Frame` fields rF2 does not expose are intentionally left
+> empty (marked with `TODO` in the code). Expect a short on-PC validation/tuning
+> pass before relying on it.
+
 ## How a new game is added later
 
 1. Write a new adapter package, e.g. `backend/adapters/acc/adapter.go`, that

@@ -41,9 +41,10 @@ Working end to end: game → adapter → server → **browser cockpit**.
 - ✅ WebSocket broadcast loop — `backend/server/` (hub fan-out, debug page)
 - ✅ LMU shared-memory adapter — `backend/adapters/lmu/` (tested + Windows-compiled)
 - ✅ Svelte UI — `frontend/` (shell + WS store + Live Data tab; partial Car/
-  Settings; placeholders for Strategy/Coaching/Driver Vs.)
+  Settings; placeholders for Strategy/Coaching/Driver Vs.). Builds under
+  Svelte 5 / Vite 8; served end-to-end by the Go binary.
 - ⬜ Live on-PC validation of the LMU adapter — not done (see caveat below)
-- ⬜ UI not yet built/run here (no Node on the dev box) — see caveat below
+- ⬜ UI not yet visually confirmed in a browser (build + serving verified)
 
 ## Session history
 
@@ -92,8 +93,11 @@ Working end to end: game → adapter → server → **browser cockpit**.
 - Dependency added: `golang.org/x/sys`.
 
 ### Session 4 — Svelte cockpit UI
-- Vite + **Svelte 4** project under `frontend/` (chose Svelte 4 + classic stores
-  for stability/docs, since the build couldn't be run on the dev box — no Node).
+- Vite + **Svelte 5** project under `frontend/` (written in classic store/`$:`
+  style, which Svelte 5 compiles in legacy mode). Deps: svelte 5, vite 8,
+  @sveltejs/vite-plugin-svelte 7. Builds clean on Node 26.
+- Post-session fix: `main.js` uses Svelte 5's `mount(App, …)` (Svelte 4's
+  `new App(…)` throws at runtime in 5).
 - `src/lib/telemetry.js`: WebSocket store (`frame`, `status`, `connected`,
   `framesReceived`), auto-reconnect, `reconnect()`. `src/lib/format.js`:
   lap-time/gap/clock/pct/gear formatters that show "—" for missing data.
@@ -118,14 +122,16 @@ Working end to end: game → adapter → server → **browser cockpit**.
 - **Adapter split**: `rf2_structs` (layout) / `reader_*` (OS) / `mapping` (pure
   logic). Only the reader is OS-specific; the heavy logic is testable anywhere.
 - **`gorilla/websocket`** chosen for the canonical, well-documented hub pattern.
-- **Frontend = Svelte 4 + Vite, classic stores** (not Svelte 5 runes). Tabs read
-  the `telemetry.js` stores directly rather than receiving props.
+- **Frontend = Svelte 5 + Vite, classic store/`$:` style** (legacy mode, not
+  runes). Tabs read the `telemetry.js` stores directly rather than via props.
+  App is mounted with `mount()` (Svelte 5 API).
 
 ## Open items / next steps
 
-1. **Build + eyeball the UI** on a machine with Node: `cd frontend && npm install
-   && npm run build`, then `cd backend && go run . -static ../frontend/dist -mock`
-   and open the browser. First real build — expect to fix any small compile nits.
+1. **Eyeball the UI in a browser**: `cd frontend && npm run build`, then
+   `cd backend && go run . -static ../frontend/dist -mock` and open
+   http://localhost:8080. Build + serving are verified; the visual/runtime check
+   in an actual browser is the remaining step.
 2. **Validate the LMU adapter against a live session** (Windows + LMU + plugin).
    Compare values to in-game. Confirm/adjust the rF2 enum mappings flagged in
    `mapping.go`: session type (`mSession`), flags/safety car (`mGamePhase`,
@@ -143,9 +149,10 @@ Working end to end: game → adapter → server → **browser cockpit**.
 
 ## Known caveats
 
-- **The UI has not been built or run** — there's no Node on the current dev box,
-  so the Svelte code is written but not compiler-verified. Run `npm run build`
-  on a Node machine; fix any nits (this is the same pattern as Go in Session 1).
+- **The UI builds and is served correctly, but hasn't been eyeballed in a
+  browser** — compilation (Svelte 5 / Vite 8) and asset serving via the Go
+  binary are verified; the actual on-screen render with live mock data is the
+  last unconfirmed step.
 - The Windows reader has not been run against the game; it's verified only by
   tests + cross-compile. See the validation note in `architecture.md`.
 - `GOOS=windows go vet` reports one intentional `unsafe.Pointer` finding (the

@@ -82,6 +82,25 @@ latest Frame says.
 in exactly this shape, and the frontend can only ever display what the Frame
 contains. Adding a new feature almost always starts there.
 
+### How the broadcast loop works
+
+The server uses the classic **hub** pattern (see `backend/server/hub.go`):
+
+- A single "hub" goroutine owns the list of connected browsers. Because only one
+  goroutine ever touches that list, no locks are needed.
+- Each browser gets its own goroutines — one for writing, one for reading — plus
+  a small buffer of pending frames.
+- To broadcast, the server stamps the Frame with a timestamp and a sequence
+  number, encodes it to JSON **once**, and hands the same bytes to every browser.
+  Encoding once (not per browser) keeps it cheap with many viewers.
+- If a browser is too slow to keep up (its buffer fills), it is dropped rather
+  than stalling everyone else. Telemetry is a constant stream where only the
+  latest frame matters, so the dropped browser simply reconnects and resyncs.
+- Periodic ping/pong messages detect and clean up connections that died silently.
+
+A small producer loop drives this at a configurable rate (`-hz`, default 10×/sec):
+read one Frame from the data source, hand it to the server to broadcast, repeat.
+
 ## Why the layers are separated
 
 - **One translator, many consumers.** Game weirdness is quarantined inside the

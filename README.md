@@ -33,11 +33,33 @@ central game-agnostic data model.
 
 ## How to run
 
-Not runnable yet — this is early scaffolding. See
-[`docs/architecture.md`](docs/architecture.md).
+The backend builds and runs today. The LMU adapter is still a stub, so use the
+`-mock` flag to stream synthetic data through the full pipeline:
+
+```bash
+cd backend
+go run . -mock
+```
+
+Then open <http://localhost:8080> in a browser. With no built Svelte frontend
+present yet, the server serves a built-in debug page that connects to the
+WebSocket and shows each incoming frame as live JSON.
+
+Useful flags (run `go run . -h` for all):
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `-mock` | off | stream synthetic data instead of the (stubbed) adapter |
+| `-bind` | `0.0.0.0` | address to bind (`0.0.0.0` = reachable on the LAN) |
+| `-port` | `8080` | TCP port |
+| `-hz` | `10` | telemetry frames broadcast per second |
+| `-static` | _(empty)_ | directory of built Svelte files (empty = debug page) |
+
+See [`docs/architecture.md`](docs/architecture.md) for how the layers connect.
 
 ## Project status
 
-**Early scaffolding.** The repository structure, the game-agnostic data model,
-and the documentation are in place. No UI and no real game-reading logic exist
-yet.
+**Early scaffolding.** In place: the repository structure, the game-agnostic
+data model, the documentation, and the **WebSocket broadcast loop** (the server
+streams telemetry frames to any number of connected browsers). Still to come:
+the real LMU shared-memory adapter and the Svelte UI.

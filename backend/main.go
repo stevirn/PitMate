@@ -1,17 +1,98 @@
-// Command PitMate is the single binary that runs on the gaming PC. It will:
-//  1. start a game adapter (LMU today) that reads telemetry,
-//  2. normalize that data into telemetry.Frame structs,
-//  3. serve those frames to the browser UI over a WebSocket, and
-//  4. serve the built Svelte frontend as static files.
+// Command PitMate is the single binary that runs on the gaming PC. It:
+//  1. starts a game adapter (LMU today) that reads telemetry,
+//  2. normalizes that data into telemetry.Frame structs,
+//  3. serves those frames to the browser UI over a WebSocket, and
+//  4. serves the built Svelte frontend as static files.
 //
-// Session 1 scaffolding: this is intentionally a stub. The real wiring of
-// adapter -> server is added in a later session.
+// Session 2 wires the produce->broadcast loop end to end. The LMU adapter is
+// still a stub (it returns a disconnected frame), so use the -mock flag to see
+// synthetic data flow through the pipeline and into a browser.
 package main
 
-import "fmt"
+import (
+	"context"
+	"flag"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/stevirn/PitMate/adapters/lmu"
+	"github.com/stevirn/PitMate/config"
+	"github.com/stevirn/PitMate/server"
+	"github.com/stevirn/PitMate/telemetry"
+)
+
+// source is anything that can produce a telemetry frame on demand. Both the LMU
+// adapter and the mock generator satisfy it, so the broadcast loop doesn't care
+// which one it's pumping.
+type source interface {
+	Read() telemetry.Frame
+}
 
 func main() {
-	// TODO: load config, start the selected adapter, start the WebSocket +
-	// static file server, and pump telemetry.Frame values to connected clients.
-	fmt.Println("PitMate — early scaffolding. Nothing to run yet. See docs/architecture.md")
+	cfg := config.Default()
+
+	// Command-line flags override the defaults.
+	flag.StringVar(&cfg.BindAddress, "bind", cfg.BindAddress, "address to bind (0.0.0.0 = all interfaces)")
+	flag.IntVar(&cfg.Port, "port", cfg.Port, "TCP port to listen on")
+	flag.StringVar(&cfg.StaticDir, "static", cfg.StaticDir, "directory of built Svelte files (empty = debug page)")
+	flag.IntVar(&cfg.UpdateHz, "hz", cfg.UpdateHz, "telemetry frames per second to broadcast")
+	flag.BoolVar(&cfg.MockData, "mock", cfg.MockData, "stream synthetic data instead of the real adapter")
+	flag.Parse()
+
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("invalid configuration: %v", err)
+	}
+
+	// Pick the data source: synthetic generator or the (stubbed) LMU adapter.
+	var src source
+	if cfg.MockData {
+		log.Print("PitMate: using MOCK data source")
+		src = newMockSource()
+	} else {
+		log.Print("PitMate: using LMU adapter (stub — will report disconnected until implemented)")
+		a := lmu.New()
+		if err := a.Connect(); err != nil {
+			log.Printf("PitMate: adapter connect failed: %v", err)
+		}
+		src = a
+	}
+
+	srv := server.New(cfg.Addr(), cfg.StaticDir)
+
+	// ctx is cancelled on Ctrl+C / SIGTERM, which unwinds both the server and
+	// the broadcast loop for a clean shutdown.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Run the HTTP/WebSocket server in the background.
+	go func() {
+		if err := srv.ListenAndServe(ctx); err != nil {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+
+	// The broadcast loop: read a frame at the configured rate and push it out.
+	broadcastLoop(ctx, srv, src, cfg.UpdateHz)
+
+	log.Print("PitMate: shut down cleanly")
+}
+
+// broadcastLoop reads one frame from src every 1/hz seconds and broadcasts it
+// to all connected browsers, until ctx is cancelled.
+func broadcastLoop(ctx context.Context, srv *server.Server, src source, hz int) {
+	interval := time.Second / time.Duration(hz)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			srv.Broadcast(src.Read())
+		}
+	}
 }

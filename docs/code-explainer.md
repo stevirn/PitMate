@@ -35,13 +35,34 @@ how PitMate finds out what is happening in the race.
 reads that game's shared memory and translates it into PitMate's own standard
 format. See `docs/architecture.md` for why this matters.
 
+**The broadcast loop** — the heartbeat of the live data. Many times per second,
+the server takes the latest race snapshot, converts it to JSON once, and sends
+that same copy to every connected browser at the same time. It uses the well-known
+"hub" pattern: a single manager (the hub) keeps the list of connected browsers
+and hands each new snapshot to all of them.
+
+**A goroutine** — Go's name for a lightweight task that runs at the same time as
+others. PitMate gives each connected browser its own goroutines (one for sending,
+one for listening) so a slow browser can't hold up the rest.
+
+**Ping / pong** — tiny "are you still there?" messages the server sends each
+browser. If a browser stops answering (e.g. the laptop was closed), the server
+notices and cleans up that dead connection.
+
 ## What each file does
 
 ### Backend (the Go program on the gaming PC)
 
-- **`backend/main.go`** — the starting point of the program. Eventually it will
-  start the adapter, start the server, and connect them. Right now it is a stub
-  that just prints a message.
+- **`backend/main.go`** — the starting point of the program. It reads the
+  settings and command-line flags, picks a data source (the real LMU adapter, or
+  the mock generator when `-mock` is given), starts the server, and runs the
+  broadcast loop: read a snapshot at the chosen rate and send it to all browsers.
+  It also handles Ctrl+C for a clean shutdown.
+
+- **`backend/mock.go`** — a synthetic data generator used for testing. With the
+  `-mock` flag it produces plausible, continuously moving values (lap progress,
+  draining fuel, oscillating tire temps) so the whole pipeline can be exercised
+  without the game running. It is a test tool, not a game adapter.
 
 - **`backend/telemetry/types.go`** — the most important file in the project. It
   defines all the "boxes on the form": every piece of race information PitMate
@@ -50,16 +71,28 @@ format. See `docs/architecture.md` for why this matters.
   in this same form, and the browser can only ever show what is on it.
 
 - **`backend/config/config.go`** — the settings: which network address and port
-  to use, which game to read, how many updates per second to send. Keeping these
-  in one place means they are never scattered through the code.
+  to use, which game to read, how many updates per second to send, where the
+  built frontend lives, and whether to use mock data. Keeping these in one place
+  means they are never scattered through the code.
 
 - **`backend/adapters/lmu/adapter.go`** — the Le Mans Ultimate translator. The
   only file that knows anything about LMU. It reads LMU's shared memory and fills
   in the standard form from `types.go`. Currently a stub.
 
-- **`backend/server/websocket.go`** — the server. It hands the cockpit web page
-  to browsers and streams the live data to them over a WebSocket. It never knows
-  which game is running; it only handles the standard form. Currently a stub.
+- **`backend/server/websocket.go`** — the server's public face. It hands the
+  cockpit web page (or a built-in debug page) to browsers, accepts WebSocket
+  connections, and stamps each outgoing snapshot with a time and a sequence
+  number before sending. It never knows which game is running; it only handles
+  the standard form.
+
+- **`backend/server/hub.go`** — the broadcast loop itself: the hub that keeps the
+  list of connected browsers and fans each snapshot out to all of them, the
+  per-browser send/receive goroutines, the slow-browser drop logic, and the
+  ping/pong keepalive.
+
+- **`backend/server/server_test.go`** — automated tests proving a broadcast
+  actually reaches a connected browser and that a stuck browser gets dropped
+  instead of jamming everyone else.
 
 ### Frontend (the cockpit web page)
 
@@ -77,5 +110,7 @@ format. See `docs/architecture.md` for why this matters.
 
 ## Current status
 
-Early scaffolding. The structure and the standard data form exist; the parts
-that read the game and draw the cockpit are still to be built.
+The structure, the standard data form, and the **broadcast loop** all exist: run
+the backend with `-mock` and open a browser to watch live data stream in. Still
+to be built: the part that reads the real game (the LMU adapter) and the part
+that draws the cockpit (the Svelte UI).

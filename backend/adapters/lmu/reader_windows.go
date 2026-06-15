@@ -12,6 +12,8 @@ package lmu
 
 import (
 	"fmt"
+	"log"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -52,13 +54,26 @@ type mappedBuffer struct {
 // winReader holds the two mapped buffers PitMate reads. They are opened lazily
 // on the first successful read so the adapter can start before the game does.
 type winReader struct {
-	tele  *mappedBuffer
-	score *mappedBuffer
+	tele      *mappedBuffer
+	score     *mappedBuffer
+	connected bool      // were both buffers readable on the previous attempt?
+	lastLog   time.Time // rate-limits the diagnostic logging
 }
 
 // newReader returns a Windows reader. Opening the shared memory is deferred to
 // read() so a not-yet-running game is not treated as a fatal error.
 func newReader() (reader, error) { return &winReader{}, nil }
+
+// note logs a diagnostic at most once every few seconds, so a persistent
+// failure at the read rate (e.g. 10x/sec) does not flood the console.
+func (r *winReader) note(format string, args ...any) {
+	now := time.Now()
+	if now.Sub(r.lastLog) < 3*time.Second {
+		return
+	}
+	r.lastLog = now
+	log.Printf("lmu: "+format, args...)
+}
 
 // openMapping opens an existing named mapping created by the plugin and maps a
 // read-only view of it. The plugin creates the mapping in the Local namespace,
@@ -94,22 +109,40 @@ func (b *mappedBuffer) free() {
 }
 
 // read lazily opens the mappings (if not already open) and returns consistent
-// snapshots of both buffers. ok is false until both are open and readable.
+// snapshots of both buffers. ok is false until both are open and readable. It
+// logs (rate-limited) why it can't read, which is the main tool for diagnosing
+// a "no data" situation: the Windows error distinguishes "mapping not found"
+// (plugin not loaded / no session) from "access denied" (a size/layout problem).
 func (r *winReader) read() (tel rf2Telemetry, sc rf2Scoring, ok bool) {
 	if r.tele == nil {
-		r.tele, _ = openMapping(mmTelemetryName, unsafe.Sizeof(tel))
+		b, err := openMapping(mmTelemetryName, unsafe.Sizeof(tel))
+		if err != nil {
+			r.connected = false
+			r.note("waiting for telemetry shared memory: %v — is LMU running with the plugin enabled and a session loaded?", err)
+			return tel, sc, false
+		}
+		r.tele = b
 	}
 	if r.score == nil {
-		r.score, _ = openMapping(mmScoringName, unsafe.Sizeof(sc))
-	}
-	if r.tele == nil || r.score == nil {
-		return tel, sc, false // game (or plugin) not running yet
+		b, err := openMapping(mmScoringName, unsafe.Sizeof(sc))
+		if err != nil {
+			r.connected = false
+			r.note("waiting for scoring shared memory: %v", err)
+			return tel, sc, false
+		}
+		r.score = b
 	}
 
 	t, okT := readVersioned[rf2Telemetry](r.tele.base)
 	s, okS := readVersioned[rf2Scoring](r.score.base)
 	if !okT || !okS {
+		r.note("shared memory opened but snapshots are inconsistent (telemetry ok=%v, scoring ok=%v)", okT, okS)
 		return tel, sc, false
+	}
+
+	if !r.connected {
+		r.connected = true
+		log.Printf("lmu: connected to shared memory (telemetry reports %d vehicles, scoring %d)", t.mNumVehicles, s.mScoringInfo.mNumVehicles)
 	}
 	return t, s, true
 }

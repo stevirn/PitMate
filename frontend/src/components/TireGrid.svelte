@@ -24,12 +24,13 @@
     : [];
 </script>
 
+<p class="legend">surface temp · tread remaining · pressure / brake temp</p>
 <div class="grid">
   {#each corners as c}
     <div class="corner">
       <div class="top">
         <span class="pos">{c.key}</span>
-        <span class="temp {tempClass(c.t?.tempC)}">{num(c.t?.tempC, 0)}°</span>
+        <span class="temp {tempClass(c.t?.tempC)}" title="surface temperature">{num(c.t?.tempC, 0)}°</span>
       </div>
       <Bar value={c.t?.wearFraction} tone={wearTone(c.t?.wearFraction)} text={num((c.t?.wearFraction ?? 0) * 100, 0) + '%'} />
       <div class="sub">
@@ -41,6 +42,11 @@
 </div>
 
 <style>
+  .legend {
+    margin: 0 0 8px;
+    font-size: 10px;
+    color: var(--dim);
+  }
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;

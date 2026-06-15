@@ -139,6 +139,19 @@ Working end to end: game → adapter → server → **browser cockpit**.
 - Status: builds/tests/cross-compiles clean. Awaiting the next on-PC run to confirm
   real values now flow (and to run the validation checklist).
 
+### Session 7 — live validation results + fixes
+- Live dump validated by user. OK: speed/gear/rpm, fuel, oil/water, tire temps
+  (surface), brake bias, lap time, position, gaps, track name, tire wear,
+  session type (practice only), pit status, compound. Untested: flags, class
+  position (GT3 only), wetness.
+- Fixed: dump now prints **sector times** (last + best) and labels tire temps as
+  **surface** (+ adds core°C); UI tire grid gained a "surface temp" legend.
+- **Virtual energy (VE)** is NOT in the rF2 shared memory (confirmed in plugin
+  source — only mFuel + mBatteryChargeFraction). LMU exposes VE via its **REST
+  API**: `GET http://localhost:6397/rest/strategy/usage` (per TinyPedal's
+  lmu_restapi.py). Plan: add a small LMU REST client as a second data source and
+  merge VE into telemetry.Energy. Need the live JSON schema before implementing.
+
 ## Key decisions (don't silently reverse)
 
 - **Server stamps `Timestamp` + `Sequence`** on `Broadcast` (not the adapter), so

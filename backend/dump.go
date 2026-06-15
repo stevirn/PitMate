@@ -34,14 +34,29 @@ func dumpFrame(f telemetry.Frame) {
 		f.Source.Game, s.Type, s.TrackName, f.RaceControl.CurrentFlag, f.RaceControl.SafetyCar, fmtClock(s.RemainingSeconds))
 	fmt.Fprintf(&b, "  pos P%d (class P%d) lap=%d last=%s best=%s gapAhead=%s gapBehind=%s\n",
 		r.PositionOverall, r.PositionInClass, t.LapsCompleted, fmtLap(t.LastLapSeconds), fmtLap(t.BestLapSeconds), fmtGap(r.GapAheadSeconds), fmtGap(r.GapBehindSeconds))
+	fmt.Fprintf(&b, "  sectors(last)=%s  sectors(best)=%s\n", fmtSectors(t.LastSectors), fmtSectors(t.BestSectors))
 	fmt.Fprintf(&b, "  speed=%.0f km/h gear=%d rpm=%.0f fuel=%.1fL (%.1f laps) bias=%.1f%%F oil=%.0f water=%.0f\n",
 		sp.CurrentKph, sp.Gear, sp.RPM, e.FuelLitres, e.FuelLapsRemaining, sy.BrakeBiasFrontPct, sy.OilTempC, sy.WaterTempC)
-	fmt.Fprintf(&b, "  tires°C FL/FR/RL/RR=%.0f/%.0f/%.0f/%.0f wear%%=%.0f/%.0f/%.0f/%.0f compound=%q\n",
+	fmt.Fprintf(&b, "  tire surface°C FL/FR/RL/RR=%.0f/%.0f/%.0f/%.0f  core°C=%.0f/%.0f/%.0f/%.0f\n",
 		tr.FrontLeft.TempC, tr.FrontRight.TempC, tr.RearLeft.TempC, tr.RearRight.TempC,
+		tr.FrontLeft.CoreTempC, tr.FrontRight.CoreTempC, tr.RearLeft.CoreTempC, tr.RearRight.CoreTempC)
+	fmt.Fprintf(&b, "  tire wear%% FL/FR/RL/RR=%.0f/%.0f/%.0f/%.0f compound=%q\n",
 		tr.FrontLeft.WearFraction*100, tr.FrontRight.WearFraction*100, tr.RearLeft.WearFraction*100, tr.RearRight.WearFraction*100, tr.Compound)
 	fmt.Fprintf(&b, "  pit=%s stops=%d inPitLane=%t hybrid=%t/%s competitors=%d\n",
 		r.PitStatus, r.PitStopCount, r.InPitLane, e.HasHybrid, e.HybridMode, len(f.Competitors))
 	fmt.Print(b.String())
+}
+
+// fmtSectors formats sector times as "s1 | s2 | s3", or "—" when not available.
+func fmtSectors(secs []float64) string {
+	if len(secs) == 0 {
+		return "—"
+	}
+	parts := make([]string, len(secs))
+	for i, s := range secs {
+		parts[i] = fmt.Sprintf("%.3f", s)
+	}
+	return strings.Join(parts, " | ")
 }
 
 // fmtLap formats a lap/sector time as M:SS.mmm, or "—" when missing.

@@ -152,6 +152,24 @@ Working end to end: game → adapter → server → **browser cockpit**.
   lmu_restapi.py). Plan: add a small LMU REST client as a second data source and
   merge VE into telemetry.Energy. Need the live JSON schema before implementing.
 
+### LMU REST API — candidate second data source (reference)
+
+Local HTTP API LMU serves (host/port to confirm live; likely `http://localhost:6397`).
+Endpoints TinyPedal uses (`tinypedal/adapter/lmu_restapi.py`) and what they give —
+several fill gaps the rF2 shared memory can't:
+
+- `/rest/strategy/usage` — energy/fuel consumption & stint usage → **virtual energy**
+- `/rest/strategy/pitstop-estimate` — pit-stop time estimate
+- `/rest/garage/UIScreen/RepairAndRefuel` — **aero damage, brake wear, suspension
+  damage, refuel amounts** (shared memory only has coarse dents!)
+- `/rest/sessions/weather` — **weather forecast** (practice/qualify/race) → Strategy tab
+- `/rest/sessions` — session info (time scale, private qualifying)
+- `/rest/garage/getPlayerGarageData` — garage/setup data (e.g. steering range)
+
+Plan: add a small LMU REST client as a second source, merged into telemetry.Frame
+(VE into Energy; damage/brake wear into Damage/Systems; forecast into Conditions).
+Need the live JSON for exact fields/units/port before implementing.
+
 ## Key decisions (don't silently reverse)
 
 - **Server stamps `Timestamp` + `Sequence`** on `Broadcast` (not the adapter), so

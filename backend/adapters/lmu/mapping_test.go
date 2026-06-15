@@ -11,6 +11,12 @@ import (
 // NUL bytes (the array starts zeroed in a fresh struct).
 func setStr(dst []byte, s string) { copy(dst, s) }
 
+// d wraps a float64 as the packed rf2f64 wire type, for building fixtures.
+func d(f float64) rf2f64 {
+	bits := math.Float64bits(f)
+	return rf2f64{uint32(bits), uint32(bits >> 32)}
+}
+
 func approx(t *testing.T, label string, got, want float64) {
 	t.Helper()
 	if math.Abs(got-want) > 1e-6 {
@@ -28,14 +34,14 @@ func buildFixture() (*rf2Telemetry, *rf2Scoring) {
 	info := &sc.mScoringInfo
 	setStr(info.mTrackName[:], "Le Mans 24h")
 	info.mSession = 10 // race
-	info.mCurrentET = 3600
-	info.mEndET = 86400
-	info.mLapDist = 13626 // track length, meters
+	info.mCurrentET = d(3600)
+	info.mEndET = d(86400)
+	info.mLapDist = d(13626) // track length, meters
 	info.mNumVehicles = 3
-	info.mAmbientTemp = 22
-	info.mTrackTemp = 30
-	info.mRaining = 0
-	info.mAvgPathWetness = 0
+	info.mAmbientTemp = d(22)
+	info.mTrackTemp = d(30)
+	info.mRaining = d(0)
+	info.mAvgPathWetness = d(0)
 	info.mGamePhase = 5 // green
 
 	// place 1 — leader
@@ -54,14 +60,14 @@ func buildFixture() (*rf2Telemetry, *rf2Scoring) {
 	setStr(v1.mVehicleName[:], "Toyota GR010")
 	setStr(v1.mVehicleClass[:], "Hypercar")
 	v1.mTotalLaps = 5
-	v1.mLapDist = 6813 // half the lap -> LapFraction 0.5
-	v1.mTimeIntoLap = 100
-	v1.mLastLapTime = 210
-	v1.mLastSector1 = 62
-	v1.mLastSector2 = 140 // cumulative -> sectors [62, 78, 70]
-	v1.mBestLapTime = 208
-	v1.mTimeBehindLeader = 4.5
-	v1.mTimeBehindNext = 2.1
+	v1.mLapDist = d(6813) // half the lap -> LapFraction 0.5
+	v1.mTimeIntoLap = d(100)
+	v1.mLastLapTime = d(210)
+	v1.mLastSector1 = d(62)
+	v1.mLastSector2 = d(140) // cumulative -> sectors [62, 78, 70]
+	v1.mBestLapTime = d(208)
+	v1.mTimeBehindLeader = d(4.5)
+	v1.mTimeBehindNext = d(2.1)
 	v1.mNumPitstops = 1
 
 	// place 3 — GT car
@@ -70,31 +76,31 @@ func buildFixture() (*rf2Telemetry, *rf2Scoring) {
 	v2.mPlace = 3
 	setStr(v2.mDriverName[:], "GT Driver")
 	setStr(v2.mVehicleClass[:], "LMGT3")
-	v2.mTimeBehindNext = 1.4 // trails the player by 1.4s
+	v2.mTimeBehindNext = d(1.4) // trails the player by 1.4s
 
 	// Telemetry: only the player's car has physics data.
 	tel := &rf2Telemetry{}
 	tel.mNumVehicles = 1
 	pt := &tel.mVehicles[0]
 	pt.mID = 10
-	pt.mFuel = 50
-	pt.mFuelCapacity = 80
+	pt.mFuel = d(50)
+	pt.mFuelCapacity = d(80)
 	pt.mGear = 4
-	pt.mEngineRPM = 7000
-	pt.mLocalVel = rf2Vec3{x: 0, y: 0, z: -55.5} // 55.5 m/s -> 199.8 km/h
-	pt.mRearBrakeBias = 0.45                     // -> 55% front
-	pt.mEngineOilTemp = 105
-	pt.mEngineWaterTemp = 88
+	pt.mEngineRPM = d(7000)
+	pt.mLocalVel = rf2Vec3{x: d(0), y: d(0), z: d(-55.5)} // 55.5 m/s -> 199.8 km/h
+	pt.mRearBrakeBias = d(0.45)                           // -> 55% front
+	pt.mEngineOilTemp = d(105)
+	pt.mEngineWaterTemp = d(88)
 	pt.mHeadlights = 1
 	pt.mElectricBoostMotorState = 2 // deploy
-	pt.mBatteryChargeFraction = 0.6
+	pt.mBatteryChargeFraction = d(0.6)
 	setStr(pt.mFrontTireCompoundName[:], "Medium")
 	fl := &pt.mWheels[0]
-	fl.mTemperature = [3]float64{350, 360, 370} // Kelvin, avg 360 -> 86.85 C
-	fl.mPressure = 165
-	fl.mWear = 0.9
-	fl.mBrakeTemp = 300 // already Celsius
-	fl.mTireCarcassTemperature = 380
+	fl.mTemperature = [3]rf2f64{d(350), d(360), d(370)} // Kelvin, avg 360 -> 86.85 C
+	fl.mPressure = d(165)
+	fl.mWear = d(0.9)
+	fl.mBrakeTemp = d(300) // already Celsius
+	fl.mTireCarcassTemperature = d(380)
 
 	return tel, sc
 }

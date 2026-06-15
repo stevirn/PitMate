@@ -48,7 +48,8 @@ func openFileMapping(access uint32, inherit bool, name *uint16) (windows.Handle,
 type mappedBuffer struct {
 	handle windows.Handle
 	base   uintptr
-	size   uintptr
+	size   uintptr // actual mapped region size (page-rounded), from VirtualQuery
+	want   uintptr // size of the Go struct we expect to read (for diagnostics)
 }
 
 // winReader holds the two mapped buffers PitMate reads. They are opened lazily
@@ -78,7 +79,12 @@ func (r *winReader) note(format string, args ...any) {
 // openMapping opens an existing named mapping created by the plugin and maps a
 // read-only view of it. The plugin creates the mapping in the Local namespace,
 // so this must run in the same Windows session as the game (it does — same PC).
-func openMapping(name string, size uintptr) (*mappedBuffer, error) {
+//
+// We pass length 0 to MapViewOfFile so it maps the ENTIRE object regardless of
+// size — passing an explicit size that exceeds the object fails with
+// ACCESS_DENIED. We then ask VirtualQuery for the real region size and bound all
+// reads to it, so a layout mismatch is diagnosable rather than a crash.
+func openMapping(name string, want uintptr) (*mappedBuffer, error) {
 	namePtr, err := windows.UTF16PtrFromString(name)
 	if err != nil {
 		return nil, err
@@ -87,12 +93,18 @@ func openMapping(name string, size uintptr) (*mappedBuffer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open mapping %s: %w", name, err)
 	}
-	addr, err := windows.MapViewOfFile(h, windows.FILE_MAP_READ, 0, 0, size)
+	addr, err := windows.MapViewOfFile(h, windows.FILE_MAP_READ, 0, 0, 0)
 	if err != nil {
 		windows.CloseHandle(h)
 		return nil, fmt.Errorf("map view %s: %w", name, err)
 	}
-	return &mappedBuffer{handle: h, base: addr, size: size}, nil
+
+	var mbi windows.MemoryBasicInformation
+	region := uintptr(0)
+	if err := windows.VirtualQuery(addr, &mbi, unsafe.Sizeof(mbi)); err == nil {
+		region = mbi.RegionSize
+	}
+	return &mappedBuffer{handle: h, base: addr, size: region, want: want}, nil
 }
 
 // free releases the view and handle. Safe on a nil receiver.
@@ -133,8 +145,8 @@ func (r *winReader) read() (tel rf2Telemetry, sc rf2Scoring, ok bool) {
 		r.score = b
 	}
 
-	t, okT := readVersioned[rf2Telemetry](r.tele.base)
-	s, okS := readVersioned[rf2Scoring](r.score.base)
+	t, okT := readVersioned[rf2Telemetry](r.tele.base, r.tele.size)
+	s, okS := readVersioned[rf2Scoring](r.score.base, r.score.size)
 	if !okT || !okS {
 		r.note("shared memory opened but snapshots are inconsistent (telemetry ok=%v, scoring ok=%v)", okT, okS)
 		return tel, sc, false
@@ -142,7 +154,13 @@ func (r *winReader) read() (tel rf2Telemetry, sc rf2Scoring, ok bool) {
 
 	if !r.connected {
 		r.connected = true
-		log.Printf("lmu: connected to shared memory (telemetry reports %d vehicles, scoring %d)", t.mNumVehicles, s.mScoringInfo.mNumVehicles)
+		// Log the buffer sizes once. If the plugin's buffer is smaller than the
+		// struct we expect, our layout is wrong — this surfaces it immediately.
+		log.Printf("lmu: connected to shared memory — telemetry buffer=%d bytes (struct %d), scoring buffer=%d bytes (struct %d); %d vehicles",
+			r.tele.size, r.tele.want, r.score.size, r.score.want, t.mNumVehicles)
+		if r.tele.size < r.tele.want || r.score.size < r.score.want {
+			log.Printf("lmu: WARNING — a mapped buffer is smaller than expected; telemetry values may be wrong (layout/version mismatch)")
+		}
 	}
 	return t, s, true
 }
@@ -162,18 +180,23 @@ func (r *winReader) close() error {
 // the same lightweight protocol the reference readers use.
 //
 // The begin/end counters are the first two uint32 fields of every buffer, hence
-// reading them at offsets 0 and 4.
-func readVersioned[T any](base uintptr) (T, bool) {
+// reading them at offsets 0 and 4. region is the actual mapped size; the copy is
+// bounded by it so a too-small buffer can never read past the mapping.
+func readVersioned[T any](base, region uintptr) (T, bool) {
 	var out T
 	size := unsafe.Sizeof(out)
+	n := size
+	if region != 0 && region < n {
+		n = region
+	}
 
 	// The one unavoidable conversion: base is a valid address returned by
 	// MapViewOfFile and stays valid until UnmapViewOfFile. go vet's unsafeptr
 	// analyzer cannot know that and flags it; it is correct here. This is the
 	// only place in the package that does it.
 	p := unsafe.Pointer(base) //nolint:govet // syscall-returned mapped address
-	dst := unsafe.Slice((*byte)(unsafe.Pointer(&out)), size)
-	src := unsafe.Slice((*byte)(p), size)
+	dst := unsafe.Slice((*byte)(unsafe.Pointer(&out)), size)[:n]
+	src := unsafe.Slice((*byte)(p), n)
 
 	const maxTries = 8
 	for try := 0; try < maxTries; try++ {

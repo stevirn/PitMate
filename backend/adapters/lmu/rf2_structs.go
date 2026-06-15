@@ -14,9 +14,15 @@
 //   - Target is 64-bit Windows (the plugin DLL is 64-bit), amd64 Go.
 //   - C++ `long`/`unsigned long` are 32-bit on Windows (LLP64) -> int32/uint32.
 //   - C++ `bool` and `unsigned char` are 1 byte -> uint8; `signed char` -> int8.
-//   - Fields use natural alignment (MSVC default pack 8). Go's struct layout on
-//     amd64 inserts the same padding, so the casts line up. The size/offset
-//     guard tests in layout_test.go assert this stays true.
+//   - **The plugin compiles these structs under `#pragma pack(push, 4)`** — 4-byte
+//     packing. That matters enormously: under pack(4) a `double` is aligned to 4
+//     bytes, but Go ALWAYS aligns float64 to 8 bytes and offers no struct packing.
+//     So we cannot use float64 here — instead every 8-byte double is represented
+//     as rf2f64 ([2]uint32), which has 4-byte alignment and therefore reproduces
+//     the pack(4) layout exactly. Read its value with .val(). (4-byte and smaller
+//     fields already align identically in Go and C under pack(4).)
+//   - The size/offset guard tests in layout_test.go assert the resulting layout
+//     matches the pack(4) sizes; the live game's buffer size is the final proof.
 //   - Each mapped buffer is prefixed by a version-tear block
 //     (mVersionUpdateBegin/End) followed by mBytesUpdatedHint, then the payload.
 //     Sources differ on whether these live in a base struct; on the wire they
@@ -25,6 +31,19 @@
 // Tire/carcass temperatures are in KELVIN here (the plugin's unit); the mapping
 // layer converts to Celsius. See mapping.go.
 package lmu
+
+import "math"
+
+// rf2f64 is an 8-byte IEEE-754 double stored as two little-endian uint32 halves.
+// Using [2]uint32 (4-byte alignment) instead of float64 (8-byte alignment) is
+// what makes our Go structs match the plugin's #pragma pack(4) layout. Call
+// val() to get the float64 value.
+type rf2f64 [2]uint32
+
+// val decodes the double. x86/amd64 is little-endian, so [0] is the low word.
+func (d rf2f64) val() float64 {
+	return math.Float64frombits(uint64(d[0]) | uint64(d[1])<<32)
+}
 
 // Names of the plugin's memory-mapped files. The plugin creates them in the
 // per-session Local namespace, so PitMate must run in the same Windows session
@@ -39,31 +58,31 @@ const maxMappedVehicles = 128
 
 // rf2Vec3 is the plugin's 3D vector (world or local coordinates), 3 doubles.
 type rf2Vec3 struct {
-	x, y, z float64
+	x, y, z rf2f64
 }
 
 // rf2Wheel is per-wheel telemetry. Order: FL, FR, RL, RR within mWheels.
 type rf2Wheel struct {
-	mSuspensionDeflection float64 // meters
-	mRideHeight           float64 // meters
-	mSuspForce            float64 // Newtons
-	mBrakeTemp            float64 // Celsius
-	mBrakePressure        float64 // 0.0-1.0
+	mSuspensionDeflection rf2f64 // meters
+	mRideHeight           rf2f64 // meters
+	mSuspForce            rf2f64 // Newtons
+	mBrakeTemp            rf2f64 // Celsius
+	mBrakePressure        rf2f64 // 0.0-1.0
 
-	mRotation              float64 // radians/sec
-	mLateralPatchVel       float64
-	mLongitudinalPatchVel  float64
-	mLateralGroundVel      float64
-	mLongitudinalGroundVel float64
-	mCamber                float64 // radians
-	mLateralForce          float64 // Newtons
-	mLongitudinalForce     float64 // Newtons
-	mTireLoad              float64 // Newtons
+	mRotation              rf2f64 // radians/sec
+	mLateralPatchVel       rf2f64
+	mLongitudinalPatchVel  rf2f64
+	mLateralGroundVel      rf2f64
+	mLongitudinalGroundVel rf2f64
+	mCamber                rf2f64 // radians
+	mLateralForce          rf2f64 // Newtons
+	mLongitudinalForce     rf2f64 // Newtons
+	mTireLoad              rf2f64 // Newtons
 
-	mGripFract   float64    // fraction of contact patch sliding
-	mPressure    float64    // kPa
-	mTemperature [3]float64 // KELVIN, left/center/right
-	mWear        float64    // 0.0-1.0, fraction of maximum (1.0 = new)
+	mGripFract   rf2f64    // fraction of contact patch sliding
+	mPressure    rf2f64    // kPa
+	mTemperature [3]rf2f64 // KELVIN, left/center/right
+	mWear        rf2f64    // 0.0-1.0, fraction of maximum (1.0 = new)
 
 	mTerrainName             [16]byte
 	mSurfaceType             uint8
@@ -71,12 +90,12 @@ type rf2Wheel struct {
 	mDetached                uint8 // bool
 	mStaticUndeflectedRadius uint8 // centimeters
 
-	mVerticalTireDeflection float64
-	mWheelYLocation         float64
-	mToe                    float64
+	mVerticalTireDeflection rf2f64
+	mWheelYLocation         rf2f64
+	mToe                    rf2f64
 
-	mTireCarcassTemperature    float64    // KELVIN
-	mTireInnerLayerTemperature [3]float64 // KELVIN
+	mTireCarcassTemperature    rf2f64    // KELVIN
+	mTireInnerLayerTemperature [3]rf2f64 // KELVIN
 
 	mExpansion [24]uint8
 }
@@ -85,10 +104,10 @@ type rf2Wheel struct {
 type rf2VehicleTelemetry struct {
 	// Time
 	mID          int32 // slot ID (matches scoring mID)
-	mDeltaTime   float64
-	mElapsedTime float64
+	mDeltaTime   rf2f64
+	mElapsedTime rf2f64
 	mLapNumber   int32
-	mLapStartET  float64
+	mLapStartET  rf2f64
 	mVehicleName [64]byte
 	mTrackName   [64]byte
 
@@ -104,56 +123,56 @@ type rf2VehicleTelemetry struct {
 
 	// Vehicle status
 	mGear            int32 // -1=reverse, 0=neutral, 1+=forward
-	mEngineRPM       float64
-	mEngineWaterTemp float64 // Celsius
-	mEngineOilTemp   float64 // Celsius
-	mClutchRPM       float64
+	mEngineRPM       rf2f64
+	mEngineWaterTemp rf2f64 // Celsius
+	mEngineOilTemp   rf2f64 // Celsius
+	mClutchRPM       rf2f64
 
 	// Driver input (unfiltered)
-	mUnfilteredThrottle float64
-	mUnfilteredBrake    float64
-	mUnfilteredSteering float64
-	mUnfilteredClutch   float64
+	mUnfilteredThrottle rf2f64
+	mUnfilteredBrake    rf2f64
+	mUnfilteredSteering rf2f64
+	mUnfilteredClutch   rf2f64
 
 	// Driver input (filtered)
-	mFilteredThrottle float64
-	mFilteredBrake    float64
-	mFilteredSteering float64
-	mFilteredClutch   float64
+	mFilteredThrottle rf2f64
+	mFilteredBrake    rf2f64
+	mFilteredSteering rf2f64
+	mFilteredClutch   rf2f64
 
 	// Misc
-	mSteeringShaftTorque float64
-	mFront3rdDeflection  float64
-	mRear3rdDeflection   float64
+	mSteeringShaftTorque rf2f64
+	mFront3rdDeflection  rf2f64
+	mRear3rdDeflection   rf2f64
 
 	// Aerodynamics
-	mFrontWingHeight float64
-	mFrontRideHeight float64
-	mRearRideHeight  float64
-	mDrag            float64
-	mFrontDownforce  float64
-	mRearDownforce   float64
+	mFrontWingHeight rf2f64
+	mFrontRideHeight rf2f64
+	mRearRideHeight  rf2f64
+	mDrag            rf2f64
+	mFrontDownforce  rf2f64
+	mRearDownforce   rf2f64
 
 	// State/damage
-	mFuel                float64 // liters
-	mEngineMaxRPM        float64
+	mFuel                rf2f64 // liters
+	mEngineMaxRPM        rf2f64
 	mScheduledStops      uint8
 	mOverheating         uint8    // bool
 	mDetached            uint8    // bool
 	mHeadlights          uint8    // bool
 	mDentSeverity        [8]uint8 // 0=none,1=some,2=more
-	mLastImpactET        float64
-	mLastImpactMagnitude float64
+	mLastImpactET        rf2f64
+	mLastImpactMagnitude rf2f64
 	mLastImpactPos       rf2Vec3
 
 	// Expanded
-	mEngineTorque           float64
+	mEngineTorque           rf2f64
 	mCurrentSector          int32 // zero-based, pitlane in sign bit
 	mSpeedLimiter           uint8
 	mMaxGears               uint8
 	mFrontTireCompoundIndex uint8
 	mRearTireCompoundIndex  uint8
-	mFuelCapacity           float64 // liters
+	mFuelCapacity           rf2f64 // liters
 	mFrontFlapActivated     uint8
 	mRearFlapActivated      uint8
 	mRearFlapLegalStatus    uint8
@@ -167,18 +186,18 @@ type rf2VehicleTelemetry struct {
 	mUnused                   [2]uint8
 	mVisualSteeringWheelRange float32
 
-	mRearBrakeBias              float64 // fraction of brakes on rear
-	mTurboBoostPressure         float64
+	mRearBrakeBias              rf2f64 // fraction of brakes on rear
+	mTurboBoostPressure         rf2f64
 	mPhysicsToGraphicsOffset    [3]float32
 	mPhysicalSteeringWheelRange float32
 
-	mBatteryChargeFraction float64 // 0.0-1.0
+	mBatteryChargeFraction rf2f64 // 0.0-1.0
 
 	// Electric boost motor
-	mElectricBoostMotorTorque      float64
-	mElectricBoostMotorRPM         float64
-	mElectricBoostMotorTemperature float64
-	mElectricBoostWaterTemperature float64
+	mElectricBoostMotorTorque      rf2f64
+	mElectricBoostMotorRPM         rf2f64
+	mElectricBoostMotorTemperature rf2f64
+	mElectricBoostWaterTemperature rf2f64
 	mElectricBoostMotorState       uint8 // 0=unavailable,1=inactive,2=propulsion,3=regen
 
 	mExpansion [111]uint8
@@ -200,10 +219,10 @@ type rf2Telemetry struct {
 type rf2ScoringInfo struct {
 	mTrackName           [64]byte
 	mSession             int32 // 0=testday,1-4=practice,5-8=qual,9=warmup,10-13=race
-	mCurrentET           float64
-	mEndET               float64 // <=0 if not time-limited
+	mCurrentET           rf2f64
+	mEndET               rf2f64 // <=0 if not time-limited
 	mMaxLaps             int32
-	mLapDist             float64 // track length in meters
+	mLapDist             rf2f64  // track length in meters
 	pointer1             [8]byte // 64-bit pointer padding in the C++ struct
 	mNumVehicles         int32
 	mGamePhase           uint8 // see mapping.go for values
@@ -214,13 +233,13 @@ type rf2ScoringInfo struct {
 	mInRealtime          uint8 // bool
 	mPlayerName          [32]byte
 	mPlrFileName         [64]byte
-	mDarkCloud           float64
-	mRaining             float64 // 0.0-1.0
-	mAmbientTemp         float64 // Celsius
-	mTrackTemp           float64 // Celsius
+	mDarkCloud           rf2f64
+	mRaining             rf2f64  // 0.0-1.0
+	mAmbientTemp         rf2f64  // Celsius
+	mTrackTemp           rf2f64  // Celsius
 	mWind                rf2Vec3 // m/s
-	mMinPathWetness      float64
-	mMaxPathWetness      float64
+	mMinPathWetness      rf2f64
+	mMaxPathWetness      rf2f64
 	mGameMode            uint8
 	mIsPasswordProtected uint8 // bool
 	mServerPort          uint16
@@ -228,7 +247,7 @@ type rf2ScoringInfo struct {
 	mMaxPlayers          int32
 	mServerName          [32]byte
 	mStartET             float32
-	mAvgPathWetness      float64 // 0.0-1.0
+	mAvgPathWetness      rf2f64 // 0.0-1.0
 	mExpansion           [200]uint8
 	pointer2             [8]byte
 }
@@ -241,17 +260,17 @@ type rf2VehicleScoring struct {
 	mTotalLaps        int16 // laps completed
 	mSector           int8
 	mFinishStatus     int8
-	mLapDist          float64 // distance along current lap, meters
-	mPathLateral      float64
-	mTrackEdge        float64
-	mBestSector1      float64
-	mBestSector2      float64 // cumulative through sector 2
-	mBestLapTime      float64
-	mLastSector1      float64
-	mLastSector2      float64 // cumulative through sector 2
-	mLastLapTime      float64
-	mCurSector1       float64
-	mCurSector2       float64
+	mLapDist          rf2f64 // distance along current lap, meters
+	mPathLateral      rf2f64
+	mTrackEdge        rf2f64
+	mBestSector1      rf2f64
+	mBestSector2      rf2f64 // cumulative through sector 2
+	mBestLapTime      rf2f64
+	mLastSector1      rf2f64
+	mLastSector2      rf2f64 // cumulative through sector 2
+	mLastLapTime      rf2f64
+	mCurSector1       rf2f64
+	mCurSector2       rf2f64
 	mNumPitstops      int16
 	mNumPenalties     int16
 	mIsPlayer         uint8 // bool
@@ -259,11 +278,11 @@ type rf2VehicleScoring struct {
 	mInPits           uint8 // bool
 	mPlace            uint8 // overall position, 1 = leader
 	mVehicleClass     [32]byte
-	mTimeBehindNext   float64 // gap to car ahead, seconds
+	mTimeBehindNext   rf2f64 // gap to car ahead, seconds
 	mLapsBehindNext   int32
-	mTimeBehindLeader float64 // gap to leader, seconds
+	mTimeBehindLeader rf2f64 // gap to leader, seconds
 	mLapsBehindLeader int32
-	mLapStartET       float64
+	mLapStartET       rf2f64
 	mPos              rf2Vec3
 	mLocalVel         rf2Vec3
 	mLocalAccel       rf2Vec3
@@ -275,8 +294,8 @@ type rf2VehicleScoring struct {
 	mServerScored     uint8
 	mIndividualPhase  uint8
 	mQualification    int32
-	mTimeIntoLap      float64
-	mEstimatedLapTime float64
+	mTimeIntoLap      rf2f64
+	mEstimatedLapTime rf2f64
 	mPitGroup         [24]byte
 	mFlag             uint8 // per-car flag
 	mUnderYellow      uint8 // bool

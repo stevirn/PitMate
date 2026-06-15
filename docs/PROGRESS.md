@@ -122,6 +122,23 @@ Working end to end: game → adapter → server → **browser cockpit**.
   and a field-by-field validation checklist (flags the inferred enum mappings).
 - Next: actually run it on the Windows gaming PC (plugin not yet installed).
 
+### Session 6 — first live test: pack(4) layout fix
+- First on-PC run: `OpenFileMapping` succeeded (plugin loaded!) but `MapViewOfFile`
+  failed with **ACCESS_DENIED** — i.e. our struct was bigger than the real buffer.
+- Root cause: the plugin compiles its structs under **`#pragma pack(push, 4)`**
+  (confirmed in the plugin source; the Python reference reader uses `_pack_ = 4`).
+  Go always 8-aligns float64 and has no struct packing, so our structs were too big.
+- Fix: every 8-byte double is now `rf2f64` ([2]uint32, 4-byte aligned) with a
+  `.val()` accessor, so the Go layout matches pack(4) exactly. Updated
+  `rf2_structs.go`, `mapping.go` (`.val()` everywhere), `mapping_test.go` (`d()`
+  helper), and `layout_test.go` (pack(4) sizes: vehicleTelemetry 1888,
+  vehicleScoring 584, scoringInfo 548, wheel 260).
+- Reader hardened: maps the whole object (length 0, no more ACCESS_DENIED),
+  VirtualQuery for the real size, bounded copy, and logs buffer-size vs struct-size
+  on connect so a residual mismatch is obvious.
+- Status: builds/tests/cross-compiles clean. Awaiting the next on-PC run to confirm
+  real values now flow (and to run the validation checklist).
+
 ## Key decisions (don't silently reverse)
 
 - **Server stamps `Timestamp` + `Sequence`** on `Broadcast` (not the adapter), so

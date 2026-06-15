@@ -24,7 +24,7 @@ const kelvinToCelsius = 273.15
 // mapFrame builds a telemetry.Frame from the raw telemetry and scoring buffers.
 func mapFrame(tel *rf2Telemetry, sc *rf2Scoring) telemetry.Frame {
 	info := &sc.mScoringInfo
-	trackLen := info.mLapDist
+	trackLen := info.mLapDist.val()
 
 	// Index telemetry vehicles by slot ID so we can attach physics data to the
 	// matching scoring entry (the player, primarily).
@@ -59,7 +59,7 @@ func mapFrame(tel *rf2Telemetry, sc *rf2Scoring) telemetry.Frame {
 
 		// Gap to the car behind = that car's gap-to-next (it trails us).
 		if behind, ok := byPlace[vs.mPlace+1]; ok {
-			car.Race.GapBehindSeconds = behind.mTimeBehindNext
+			car.Race.GapBehindSeconds = behind.mTimeBehindNext.val()
 		}
 
 		if vs.mIsPlayer != 0 {
@@ -90,10 +90,11 @@ func mapFrame(tel *rf2Telemetry, sc *rf2Scoring) telemetry.Frame {
 
 // mapSession fills session-wide info from rF2 scoring info.
 func mapSession(info *rf2ScoringInfo) telemetry.SessionInfo {
-	timed := info.mEndET > 0
+	endET := info.mEndET.val()
+	timed := endET > 0
 	remaining := 0.0
 	if timed {
-		remaining = info.mEndET - info.mCurrentET
+		remaining = endET - info.mCurrentET.val()
 	}
 	totalLaps := 0
 	if !timed && info.mMaxLaps > 0 && info.mMaxLaps < 100000 {
@@ -103,16 +104,16 @@ func mapSession(info *rf2ScoringInfo) telemetry.SessionInfo {
 	return telemetry.SessionInfo{
 		Type:             mapSessionType(info.mSession),
 		TrackName:        cstr(info.mTrackName[:]),
-		TrackLengthM:     info.mLapDist,
-		ElapsedSeconds:   info.mCurrentET,
+		TrackLengthM:     info.mLapDist.val(),
+		ElapsedSeconds:   info.mCurrentET.val(),
 		RemainingSeconds: remaining,
 		IsTimed:          timed,
 		TotalLaps:        totalLaps,
 		Conditions: telemetry.Conditions{
-			AirTempC:         info.mAmbientTemp,
-			TrackTempC:       info.mTrackTemp,
-			TrackWetness:     info.mAvgPathWetness,
-			RainIntensity:    info.mRaining,
+			AirTempC:         info.mAmbientTemp.val(),
+			TrackTempC:       info.mTrackTemp.val(),
+			TrackWetness:     info.mAvgPathWetness.val(),
+			RainIntensity:    info.mRaining.val(),
 			WindSpeedKph:     vec3Magnitude(info.mWind) * 3.6,
 			WindDirectionDeg: windDirectionDeg(info.mWind),
 		},
@@ -166,19 +167,19 @@ func mapCar(vs *rf2VehicleScoring, vt *rf2VehicleTelemetry, info *rf2ScoringInfo
 func mapTiming(vs *rf2VehicleScoring, trackLen float64) telemetry.Timing {
 	t := telemetry.Timing{
 		LapsCompleted:       int(vs.mTotalLaps),
-		CurrentLapSeconds:   vs.mTimeIntoLap,
-		EstimatedLapSeconds: vs.mEstimatedLapTime,
+		CurrentLapSeconds:   vs.mTimeIntoLap.val(),
+		EstimatedLapSeconds: vs.mEstimatedLapTime.val(),
 	}
 	if trackLen > 0 {
-		t.LapFraction = clamp01(vs.mLapDist / trackLen)
+		t.LapFraction = clamp01(vs.mLapDist.val() / trackLen)
 	}
-	if vs.mLastLapTime > 0 {
-		t.LastLapSeconds = vs.mLastLapTime
-		t.LastSectors = splitSectors(vs.mLastSector1, vs.mLastSector2, vs.mLastLapTime)
+	if last := vs.mLastLapTime.val(); last > 0 {
+		t.LastLapSeconds = last
+		t.LastSectors = splitSectors(vs.mLastSector1.val(), vs.mLastSector2.val(), last)
 	}
-	if vs.mBestLapTime > 0 {
-		t.BestLapSeconds = vs.mBestLapTime
-		t.BestSectors = splitSectors(vs.mBestSector1, vs.mBestSector2, vs.mBestLapTime)
+	if best := vs.mBestLapTime.val(); best > 0 {
+		t.BestLapSeconds = best
+		t.BestSectors = splitSectors(vs.mBestSector1.val(), vs.mBestSector2.val(), best)
 	}
 	// MiniSectors: not exposed by rF2 shared memory. // TODO: verify LMU availability
 	return t
@@ -196,10 +197,10 @@ func splitSectors(cumS1, cumS2, lap float64) []float64 {
 // mapEnergy fills fuel and hybrid state from telemetry.
 func mapEnergy(vt *rf2VehicleTelemetry) telemetry.Energy {
 	e := telemetry.Energy{
-		FuelLitres:           vt.mFuel,
-		FuelCapacityLitres:   vt.mFuelCapacity,
+		FuelLitres:           vt.mFuel.val(),
+		FuelCapacityLitres:   vt.mFuelCapacity.val(),
 		HasHybrid:            vt.mElectricBoostMotorState != 0, // 0 = unavailable
-		HybridChargeFraction: clamp01(vt.mBatteryChargeFraction),
+		HybridChargeFraction: clamp01(vt.mBatteryChargeFraction.val()),
 		HybridMode:           hybridModeName(vt.mElectricBoostMotorState),
 		// FuelPerLastLap / FuelPerLapAvg / FuelLapsRemaining require tracking
 		// fuel across laps; the adapter does not keep history yet.
@@ -238,14 +239,14 @@ func mapTireCorner(w *rf2Wheel) telemetry.TireCorner {
 	return telemetry.TireCorner{
 		TempC: kToC(avg3(w.mTemperature)),
 		TempBandsC: []float64{
-			kToC(w.mTemperature[0]), // left
-			kToC(w.mTemperature[1]), // center
-			kToC(w.mTemperature[2]), // right
+			kToC(w.mTemperature[0].val()), // left
+			kToC(w.mTemperature[1].val()), // center
+			kToC(w.mTemperature[2].val()), // right
 		},
-		CoreTempC:    kToC(w.mTireCarcassTemperature),
-		PressureKpa:  w.mPressure,
-		WearFraction: clamp01(w.mWear),
-		BrakeTempC:   w.mBrakeTemp, // already Celsius in rF2
+		CoreTempC:    kToC(w.mTireCarcassTemperature.val()),
+		PressureKpa:  w.mPressure.val(),
+		WearFraction: clamp01(w.mWear.val()),
+		BrakeTempC:   w.mBrakeTemp.val(), // already Celsius in rF2
 		// Locking: not directly exposed. // TODO: verify LMU availability
 	}
 }
@@ -256,7 +257,7 @@ func mapSpeed(vt *rf2VehicleTelemetry) telemetry.Speed {
 	return telemetry.Speed{
 		CurrentKph: vec3Magnitude(vt.mLocalVel) * 3.6,
 		Gear:       int(vt.mGear),
-		RPM:        vt.mEngineRPM,
+		RPM:        vt.mEngineRPM.val(),
 		// TopKph / TrapKph need history or a speed trap; not tracked yet.
 		// TODO: track session top speed in the adapter.
 	}
@@ -265,9 +266,9 @@ func mapSpeed(vt *rf2VehicleTelemetry) telemetry.Speed {
 // mapSystems fills adjustable/monitored systems from telemetry.
 func mapSystems(vt *rf2VehicleTelemetry) telemetry.Systems {
 	return telemetry.Systems{
-		BrakeBiasFrontPct: (1.0 - vt.mRearBrakeBias) * 100.0,
-		OilTempC:          vt.mEngineOilTemp,
-		WaterTempC:        vt.mEngineWaterTemp,
+		BrakeBiasFrontPct: (1.0 - vt.mRearBrakeBias.val()) * 100.0,
+		OilTempC:          vt.mEngineOilTemp.val(),
+		WaterTempC:        vt.mEngineWaterTemp.val(),
 		LightsOn:          vt.mHeadlights != 0,
 		PitLimiterOn:      vt.mSpeedLimiter != 0,
 		// TC / ABS / EngineMap / ARBs are not in the telemetry buffer.
@@ -295,8 +296,8 @@ func mapDamage(vt *rf2VehicleTelemetry) telemetry.Damage {
 func mapRaceState(vs *rf2VehicleScoring) telemetry.RaceState {
 	return telemetry.RaceState{
 		PositionOverall:    int(vs.mPlace),
-		GapToLeaderSeconds: vs.mTimeBehindLeader,
-		GapAheadSeconds:    vs.mTimeBehindNext,
+		GapToLeaderSeconds: vs.mTimeBehindLeader.val(),
+		GapAheadSeconds:    vs.mTimeBehindNext.val(),
 		PitStatus:          mapPitStatus(vs.mPitState),
 		PitStopCount:       int(vs.mNumPitstops),
 		InPitLane:          vs.mInPits != 0,
@@ -373,16 +374,17 @@ func cstr(b []byte) string {
 
 func kToC(k float64) float64 { return k - kelvinToCelsius }
 
-func avg3(a [3]float64) float64 { return (a[0] + a[1] + a[2]) / 3.0 }
+func avg3(a [3]rf2f64) float64 { return (a[0].val() + a[1].val() + a[2].val()) / 3.0 }
 
 func vec3Magnitude(v rf2Vec3) float64 {
-	return math.Sqrt(v.x*v.x + v.y*v.y + v.z*v.z)
+	x, y, z := v.x.val(), v.y.val(), v.z.val()
+	return math.Sqrt(x*x + y*y + z*z)
 }
 
 // windDirectionDeg returns the wind heading in degrees (0-360, 0 = +Z/North),
 // derived from the horizontal components of the wind vector.
 func windDirectionDeg(v rf2Vec3) float64 {
-	deg := math.Atan2(v.x, v.z) * 180.0 / math.Pi
+	deg := math.Atan2(v.x.val(), v.z.val()) * 180.0 / math.Pi
 	if deg < 0 {
 		deg += 360
 	}

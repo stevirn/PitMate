@@ -32,6 +32,8 @@ func dumpFrame(f telemetry.Frame) {
 	b.WriteString("\n── PitMate dump ──\n")
 	fmt.Fprintf(&b, "  game=%s session=%s track=%q flag=%s sc=%s timeLeft=%s\n",
 		f.Source.Game, s.Type, s.TrackName, f.RaceControl.CurrentFlag, f.RaceControl.SafetyCar, fmtClock(s.RemainingSeconds))
+	fmt.Fprintf(&b, "  conditions: air=%.0f°C track=%.0f°C rain=%.0f%% wetness=%.0f%% wind=%.0f km/h\n",
+		s.Conditions.AirTempC, s.Conditions.TrackTempC, s.Conditions.RainIntensity*100, s.Conditions.TrackWetness*100, s.Conditions.WindSpeedKph)
 	fmt.Fprintf(&b, "  pos P%d (class P%d) lap=%d last=%s best=%s gapAhead=%s gapBehind=%s\n",
 		r.PositionOverall, r.PositionInClass, t.LapsCompleted, fmtLap(t.LastLapSeconds), fmtLap(t.BestLapSeconds), fmtGap(r.GapAheadSeconds), fmtGap(r.GapBehindSeconds))
 	fmt.Fprintf(&b, "  sectors(last)=%s  sectors(best)=%s\n", fmtSectors(t.LastSectors), fmtSectors(t.BestSectors))

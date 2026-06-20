@@ -43,6 +43,8 @@ func main() {
 	flag.BoolVar(&cfg.MockData, "mock", cfg.MockData, "stream synthetic data instead of the real adapter")
 	var dump bool
 	flag.BoolVar(&dump, "dump", false, "print a one-second summary of the telemetry to the console (for validation)")
+	var lmuDebug bool
+	flag.BoolVar(&lmuDebug, "lmudebug", false, "log raw LMU enum fields (pit state, flags, game phase) for the player (for diagnosing mappings)")
 	flag.Parse()
 
 	if err := cfg.Validate(); err != nil {
@@ -57,6 +59,7 @@ func main() {
 	} else {
 		log.Print("PitMate: using LMU adapter (reads LMU shared memory on Windows; reports disconnected elsewhere or until the game is running)")
 		a := lmu.New()
+		a.Debug = lmuDebug
 		if err := a.Connect(); err != nil {
 			log.Printf("PitMate: adapter connect failed: %v", err)
 		}

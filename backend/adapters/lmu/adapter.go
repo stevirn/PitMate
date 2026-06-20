@@ -18,7 +18,12 @@
 // the adapter compiles everywhere and simply reports "not connected".
 package lmu
 
-import "github.com/stevirn/PitMate/telemetry"
+import (
+	"log"
+	"time"
+
+	"github.com/stevirn/PitMate/telemetry"
+)
 
 // reader abstracts platform-specific access to the plugin's shared memory. It
 // returns raw rF2 buffers; the mapping layer turns them into a Frame.
@@ -34,6 +39,12 @@ type reader interface {
 type Adapter struct {
 	rd        reader
 	connected bool
+
+	// Debug, when true, logs raw rF2 enum fields (pit state, flags, game phase)
+	// for the player once per second. Used to decode LMU's actual enum values
+	// against the in-game state when a mapping looks wrong.
+	Debug     bool
+	lastDebug time.Time
 }
 
 // New creates an LMU adapter. It does not open shared memory yet.
@@ -72,7 +83,35 @@ func (a *Adapter) Read() telemetry.Frame {
 		return a.disconnectedFrame()
 	}
 	a.connected = true
+	if a.Debug {
+		a.logRaw(&tel, &sc)
+	}
 	return mapFrame(&tel, &sc)
+}
+
+// logRaw prints the player's raw rF2 enum fields once per second so their actual
+// values can be matched to in-game state (used to fix the pit-state and flag
+// mappings, whose enum values LMU does not document).
+func (a *Adapter) logRaw(tel *rf2Telemetry, sc *rf2Scoring) {
+	now := time.Now()
+	if now.Sub(a.lastDebug) < time.Second {
+		return
+	}
+	a.lastDebug = now
+
+	info := &sc.mScoringInfo
+	n := int(info.mNumVehicles)
+	if n > maxMappedVehicles {
+		n = maxMappedVehicles
+	}
+	for i := 0; i < n; i++ {
+		v := &sc.mVehicles[i]
+		if v.mIsPlayer != 0 {
+			log.Printf("lmu/raw: gamePhase=%d yellowFlagState=%d sectorFlags=%v | player: pitState=%d inPits=%d inGarageStall=%d flag=%d underYellow=%d",
+				info.mGamePhase, info.mYellowFlagState, info.mSectorFlag, v.mPitState, v.mInPits, v.mInGarageStall, v.mFlag, v.mUnderYellow)
+			return
+		}
+	}
 }
 
 // Close releases the reader's resources.

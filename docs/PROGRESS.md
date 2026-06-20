@@ -152,23 +152,50 @@ Working end to end: game → adapter → server → **browser cockpit**.
   lmu_restapi.py). Plan: add a small LMU REST client as a second data source and
   merge VE into telemetry.Energy. Need the live JSON schema before implementing.
 
-### LMU REST API — candidate second data source (reference)
+### LMU REST API — second data source (CONFIRMED live, port 6397)
 
-Local HTTP API LMU serves (host/port to confirm live; likely `http://localhost:6397`).
-Endpoints TinyPedal uses (`tinypedal/adapter/lmu_restapi.py`) and what they give —
-several fill gaps the rF2 shared memory can't:
+Base `http://localhost:6397`. Live JSON captured (Session 8). Key endpoints/fields:
 
-- `/rest/strategy/usage` — energy/fuel consumption & stint usage → **virtual energy**
-- `/rest/strategy/pitstop-estimate` — pit-stop time estimate
-- `/rest/garage/UIScreen/RepairAndRefuel` — **aero damage, brake wear, suspension
-  damage, refuel amounts** (shared memory only has coarse dents!)
-- `/rest/sessions/weather` — **weather forecast** (practice/qualify/race) → Strategy tab
-- `/rest/sessions` — session info (time scale, private qualifying)
-- `/rest/garage/getPlayerGarageData` — garage/setup data (e.g. steering range)
+- **`/rest/garage/UIScreen/RepairAndRefuel`** — the richest one:
+  - `fuelInfo`: `currentFuel`/`maxFuel` (L), `currentVirtualEnergy`/`maxVirtualEnergy`
+    (raw counts; **VE% = current/max**, e.g. 656615616/690000000 ≈ 0.952),
+    `currentBattery`/`maxBattery`.
+  - `pitMenu`: full pit menu state — VIRTUAL ENERGY (% → laps; 100%≈33 laps here),
+    FUEL RATIO, TIRES (compound + used%), pressures, wings, brake ducts, damage.
+  - `wearables`: `body.aero` (aero damage 0..1), `brakes[4]`, `suspension[4]`,
+    `tires[4]` (wear) — the **detailed damage** shared memory lacks.
+  - `racePosition`: `placeInClass`, `placeOverall`, `gapToFirstInClassTime/Laps`.
+  - `pitStopLength.timeInSeconds`, `pitStopTimes.*` (service time constants).
+  - `currentWeather`: ambient/track temp (Kelvin), rainIntensity, cloud, humidity.
+  - `weatherForecast.nodes`: arrays for 5 nodes (Temp, RainChance, Sky, Wind…).
+- **`/rest/sessions/weather`** — forecast per PRACTICE/QUALIFY/RACE at nodes
+  START/NODE_25/50/75/FINISH (rain chance, sky, temp, wind, humidity).
+- **`/rest/strategy/usage`** — per-driver per-lap history `{lap, pit, stint, ve,
+  (player also fuel & tyres[4])}` → consumption/lap → laps remaining.
+- `/rest/strategy/pitstop-estimate`, `/rest/sessions`, `/rest/garage/getPlayerGarageData`.
 
-Plan: add a small LMU REST client as a second source, merged into telemetry.Frame
-(VE into Energy; damage/brake wear into Damage/Systems; forecast into Conditions).
-Need the live JSON for exact fields/units/port before implementing.
+Plan (VE first): add `adapters/lmu/restapi.go` — a small HTTP client polling the
+REST API (slower cadence, ~1–2 Hz), parse into Go structs, and merge into
+telemetry.Frame: VE → Energy (new VirtualEnergy fields), wearables → Damage,
+weather → Conditions/forecast, placeInClass/gap → Race. Handle the API being
+absent gracefully (shared memory still works alone). Player matched by driver name.
+
+### Session 8 — REST captured; more validation + diagnostics
+- Captured live REST JSON (port 6397) — see the REST reference above. Confirms VE,
+  detailed damage, weather forecast, pit-stop times, class position are all available.
+- Validation results: class position OK. Flags green-only (practice has no flags —
+  needs a race to test). Wetness wasn't shown → **added a conditions line to the
+  dump** (air/track temp, rain%, wetness%, wind). Pit status wrong: user's trace
+  showed approach→exit→none with no "stopped" even while stationary/refuelling, so
+  LMU's `mPitState` enum ≠ standard rF2. Sectors: last sectors correct; best-sector
+  S3 is stale (data limitation — see below).
+- Added **`-lmudebug`**: adapter logs the player's raw enum fields (gamePhase,
+  yellowFlagState, sectorFlags, pitState, inPits, inGarageStall, flag, underYellow)
+  once/sec, to decode LMU's actual pit/flag values. Run it during a pit stop.
+- **Best sectors limitation**: rF2 gives best S1 and best cumulative S1+S2 only;
+  there is no best-S3 field, so our derived best-S3 (=bestLap-bestCumS2) is from a
+  different lap and can read stale. Proper fix = stateful per-sector tracking
+  (OptimalSectors), part of the planned stateful enrichment.
 
 ## Key decisions (don't silently reverse)
 

@@ -304,6 +304,18 @@ type Energy struct {
 	// Electrical energy deployed so far this lap, megajoules.
 	// TODO: verify LMU availability
 	HybridDeployedThisLapMJ float64 `json:"hybridDeployedThisLapMJ"`
+
+	// --- Virtual energy (LMU) ---
+	// LMU regulates a per-stint "virtual energy" budget (fuel + hybrid deployment
+	// combined), which is the primary strategic resource in Hypercar/LMDh racing.
+	// It is NOT in the shared memory; PitMate reads it from LMU's REST API, so an
+	// adapter without that API leaves these at their zero values.
+
+	// True when a virtual-energy figure is available (LMU REST API reachable).
+	HasVirtualEnergy bool `json:"hasVirtualEnergy"`
+
+	// Virtual energy remaining as a fraction 0.0–1.0 of the stint allocation.
+	VirtualEnergyFraction float64 `json:"virtualEnergyFraction"`
 }
 
 // -----------------------------------------------------------------------------

@@ -37,8 +37,12 @@ func dumpFrame(f telemetry.Frame) {
 	fmt.Fprintf(&b, "  pos P%d (class P%d) lap=%d last=%s best=%s gapAhead=%s gapBehind=%s\n",
 		r.PositionOverall, r.PositionInClass, t.LapsCompleted, fmtLap(t.LastLapSeconds), fmtLap(t.BestLapSeconds), fmtGap(r.GapAheadSeconds), fmtGap(r.GapBehindSeconds))
 	fmt.Fprintf(&b, "  sectors(last)=%s  sectors(best)=%s\n", fmtSectors(t.LastSectors), fmtSectors(t.BestSectors))
-	fmt.Fprintf(&b, "  speed=%.0f km/h gear=%d rpm=%.0f fuel=%.1fL (%.1f laps) bias=%.1f%%F oil=%.0f water=%.0f\n",
-		sp.CurrentKph, sp.Gear, sp.RPM, e.FuelLitres, e.FuelLapsRemaining, sy.BrakeBiasFrontPct, sy.OilTempC, sy.WaterTempC)
+	veStr := "—"
+	if e.HasVirtualEnergy {
+		veStr = fmt.Sprintf("%.0f%%", e.VirtualEnergyFraction*100)
+	}
+	fmt.Fprintf(&b, "  speed=%.0f km/h gear=%d rpm=%.0f fuel=%.1fL (%.1f laps) ve=%s bias=%.1f%%F oil=%.0f water=%.0f\n",
+		sp.CurrentKph, sp.Gear, sp.RPM, e.FuelLitres, e.FuelLapsRemaining, veStr, sy.BrakeBiasFrontPct, sy.OilTempC, sy.WaterTempC)
 	fmt.Fprintf(&b, "  tire surface°C FL/FR/RL/RR=%.0f/%.0f/%.0f/%.0f  core°C=%.0f/%.0f/%.0f/%.0f\n",
 		tr.FrontLeft.TempC, tr.FrontRight.TempC, tr.RearLeft.TempC, tr.RearRight.TempC,
 		tr.FrontLeft.CoreTempC, tr.FrontRight.CoreTempC, tr.RearLeft.CoreTempC, tr.RearRight.CoreTempC)

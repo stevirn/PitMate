@@ -65,6 +65,8 @@ Useful backend flags (run `go run . -h` for all):
 |---|---|---|
 | `-mock` | off | stream synthetic data instead of the real LMU adapter |
 | `-dump` | off | print a one-second telemetry summary to the console (for validation) |
+| `-lmudebug` | off | log raw LMU enum fields (pit state, flags) for the player |
+| `-lmu-rest` | `http://localhost:6397` | LMU REST API base URL for virtual energy (empty disables) |
 | `-static` | _(empty)_ | directory of built Svelte files (empty = debug page) |
 | `-bind` | `0.0.0.0` | address to bind (`0.0.0.0` = reachable on the LAN) |
 | `-port` | `8080` | TCP port |

@@ -27,6 +27,16 @@
         : energy.fuelLapsRemaining < 5
           ? 'warn'
           : 'ok';
+
+  // Virtual energy tone: same idea, on the 0..1 remaining fraction.
+  $: veTone =
+    energy?.virtualEnergyFraction == null
+      ? 'accent'
+      : energy.virtualEnergyFraction < 0.1
+        ? 'danger'
+        : energy.virtualEnergyFraction < 0.25
+          ? 'warn'
+          : 'ok';
 </script>
 
 {#if !$connected || !p}
@@ -73,8 +83,16 @@
         <Stat label="Laps left" value={num(energy?.fuelLapsRemaining, 1)} tone={fuelTone} />
         <Stat label="Per lap" value={num(energy?.fuelPerLapAvg, 2)} unit="L" />
       </div>
+      {#if energy?.hasVirtualEnergy}
+        <div class="stats" style="margin-top:12px">
+          <Stat label="Virtual energy" value={pct(energy?.virtualEnergyFraction)} big tone={veTone} />
+        </div>
+      {/if}
       <div class="bars">
         <Bar label="Tank" value={energy?.fuelCapacityLitres ? energy.fuelLitres / energy.fuelCapacityLitres : 0} tone={fuelTone} text={num(energy?.fuelLitres, 0) + 'L'} />
+        {#if energy?.hasVirtualEnergy}
+          <Bar label="VE" value={energy?.virtualEnergyFraction} tone={veTone} text={pct(energy?.virtualEnergyFraction)} />
+        {/if}
         {#if energy?.hasHybrid}
           <Bar label="Batt" value={energy?.hybridChargeFraction} tone="accent" text={pct(energy?.hybridChargeFraction)} />
         {/if}

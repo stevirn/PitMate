@@ -197,6 +197,25 @@ absent gracefully (shared memory still works alone). Player matched by driver na
   different lap and can read stale. Proper fix = stateful per-sector tracking
   (OptimalSectors), part of the planned stateful enrichment.
 
+### Session 9 — virtual energy via REST (built, awaiting live test)
+- Added `adapters/lmu/restapi.go`: background poller of `GET {baseURL}/rest/strategy/usage`,
+  caches latest `ve` (0..1) per driver. Default base `http://localhost:6397`
+  (config `LMURestURL`, flag `-lmu-rest`, empty disables). Runs on its own
+  goroutine at 1 Hz with an 800 ms timeout, so the 10 Hz telemetry loop never
+  blocks; falls back to shared-memory-only if the API is down.
+- `telemetry.Energy` gained `HasVirtualEnergy` + `VirtualEnergyFraction`.
+- Adapter overlays VE onto the player AND competitors (matched by driver name);
+  Connect starts the poller, Close stops it.
+- Surfaced in: dump (`ve=NN%`) and the Live Data Fuel & Energy panel (Stat + bar,
+  with low-VE warn/danger tones). Mock emits draining VE so the UI demos it.
+- Tests (run on Linux via httptest): parse real usage JSON → latest ve per driver;
+  name-trim lookup; HTTP-error path. All race-clean.
+- **To verify live:** that `/rest/strategy/usage` is the right LIVE source (vs
+  garage-only) and updates sensibly; player name from shared memory matches the
+  REST driver-name key. If VE needs sub-lap smoothness, switch to
+  `/rest/garage/UIScreen/RepairAndRefuel` fuelInfo (current/max). Pit-state and
+  flag raw values still pending (`-lmudebug`).
+
 ## Key decisions (don't silently reverse)
 
 - **Server stamps `Timestamp` + `Sequence`** on `Broadcast` (not the adapter), so

@@ -40,6 +40,10 @@ type Config struct {
 	// instead of (the currently stubbed) real adapter output. Useful for
 	// developing and testing the pipeline without the game running.
 	MockData bool
+
+	// LMURestURL is the base URL of LMU's local REST API, used for data not in
+	// shared memory (virtual energy). Empty disables it.
+	LMURestURL string
 }
 
 // Addr returns the "host:port" string the HTTP/WebSocket server listens on.
@@ -69,5 +73,6 @@ func Default() Config {
 		EventLogSize: 100,
 		StaticDir:    "", // empty -> built-in debug page until a Svelte build exists
 		MockData:     false,
+		LMURestURL:   "http://localhost:6397", // LMU REST API (virtual energy); empty disables
 	}
 }

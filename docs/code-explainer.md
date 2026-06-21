@@ -96,6 +96,14 @@ notices and cleans up that dead connection.
     standard form out (including unit conversions, e.g. tire temperatures from
     Kelvin to Celsius). This is plain logic with no Windows dependency, so it is
     fully tested everywhere.
+  - **`restapi.go`** — a second data source. Some things LMU does NOT put in
+    shared memory (notably **virtual energy**, its per-stint energy budget) are
+    available from a small web server LMU runs on the gaming PC (a "REST API").
+    This file quietly polls that web server in the background and folds the
+    result into the same standard form, so the rest of PitMate doesn't care that
+    it came from a different place. If the web server isn't reachable, PitMate
+    just carries on with the shared-memory data. (Being plain web requests, this
+    is testable on any machine.)
   - **`layout_test.go` / `mapping_test.go`** — automated checks that the memory
     description has the right size/shape and that the translation produces the
     expected values.

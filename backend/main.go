@@ -45,6 +45,7 @@ func main() {
 	flag.BoolVar(&dump, "dump", false, "print a one-second summary of the telemetry to the console (for validation)")
 	var lmuDebug bool
 	flag.BoolVar(&lmuDebug, "lmudebug", false, "log raw LMU enum fields (pit state, flags, game phase) for the player (for diagnosing mappings)")
+	flag.StringVar(&cfg.LMURestURL, "lmu-rest", cfg.LMURestURL, "LMU REST API base URL for virtual energy (empty to disable)")
 	flag.Parse()
 
 	if err := cfg.Validate(); err != nil {
@@ -60,6 +61,7 @@ func main() {
 		log.Print("PitMate: using LMU adapter (reads LMU shared memory on Windows; reports disconnected elsewhere or until the game is running)")
 		a := lmu.New()
 		a.Debug = lmuDebug
+		a.RestURL = cfg.LMURestURL
 		if err := a.Connect(); err != nil {
 			log.Printf("PitMate: adapter connect failed: %v", err)
 		}

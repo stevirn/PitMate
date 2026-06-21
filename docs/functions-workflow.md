@@ -12,9 +12,11 @@ the WebSocket data store in `lib/telemetry.js`).
 
 ### 1. Live Data — ✅ implemented
 The strategist's at-a-glance dashboard during a stint.
-- **Shows:** fuel level and laps remaining, hybrid/energy state, tire temps /
-  pressures / wear per corner, current/last/best lap, sector times, speeds.
-- **Reads:** `Player.Energy`, `Player.Tires`, `Player.Timing`, `Player.Speed`.
+- **Shows:** fuel level and laps remaining, **virtual energy** (LMU, via REST API),
+  hybrid/energy state, tire temps / pressures / wear per corner, current/last/best
+  lap, sector times, speeds.
+- **Reads:** `Player.Energy` (incl. `VirtualEnergyFraction`), `Player.Tires`,
+  `Player.Timing`, `Player.Speed`.
 - **Why:** the core moment-to-moment picture the strategist watches most.
 
 ### 2. Strategy Calls — ⬜ planned (placeholder)

@@ -40,6 +40,11 @@ type Adapter struct {
 	rd        reader
 	connected bool
 
+	// RestURL is the base URL of LMU's REST API, used for data not in shared
+	// memory (virtual energy). Empty disables it. Set before Connect.
+	RestURL string
+	rest    *restClient
+
 	// Debug, when true, logs raw rF2 enum fields (pit state, flags, game phase)
 	// for the player once per second. Used to decode LMU's actual enum values
 	// against the in-game state when a mapping looks wrong.
@@ -66,6 +71,12 @@ func (a *Adapter) Connect() error {
 		return err
 	}
 	a.rd = rd
+
+	// Start the REST poller for virtual energy (a second, optional source).
+	if a.RestURL != "" {
+		a.rest = newRESTClient(a.RestURL)
+		a.rest.start()
+	}
 	return nil
 }
 
@@ -86,7 +97,30 @@ func (a *Adapter) Read() telemetry.Frame {
 	if a.Debug {
 		a.logRaw(&tel, &sc)
 	}
-	return mapFrame(&tel, &sc)
+
+	frame := mapFrame(&tel, &sc)
+	a.overlayVirtualEnergy(&frame)
+	return frame
+}
+
+// overlayVirtualEnergy fills in virtual energy (from the REST API) for the player
+// and any competitor whose driver name the API knows. Shared memory does not
+// carry VE, so this is the only source. A no-op when the REST client is absent
+// or the API is unreachable.
+func (a *Adapter) overlayVirtualEnergy(frame *telemetry.Frame) {
+	if a.rest == nil {
+		return
+	}
+	if ve, ok := a.rest.virtualEnergy(frame.Player.Identity.DriverName); ok {
+		frame.Player.Energy.HasVirtualEnergy = true
+		frame.Player.Energy.VirtualEnergyFraction = ve
+	}
+	for i := range frame.Competitors {
+		if ve, ok := a.rest.virtualEnergy(frame.Competitors[i].Identity.DriverName); ok {
+			frame.Competitors[i].Energy.HasVirtualEnergy = true
+			frame.Competitors[i].Energy.VirtualEnergyFraction = ve
+		}
+	}
 }
 
 // logRaw prints the player's raw rF2 enum fields once per second so their actual
@@ -114,8 +148,11 @@ func (a *Adapter) logRaw(tel *rf2Telemetry, sc *rf2Scoring) {
 	}
 }
 
-// Close releases the reader's resources.
+// Close releases the reader's resources and stops the REST poller.
 func (a *Adapter) Close() error {
+	if a.rest != nil {
+		a.rest.close()
+	}
 	if a.rd == nil {
 		return nil
 	}
